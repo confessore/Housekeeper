@@ -31,6 +31,22 @@ pub fn register() -> CreateCommand {
                 .required(true),
             ),
         )
+        .add_option(
+            CreateCommandOption::new(
+                CommandOptionType::SubCommand,
+                "remove",
+                "Remove a role tier",
+            )
+            .add_sub_option(
+                CreateCommandOption::new(CommandOptionType::String, "name", "Tier name")
+                    .required(true),
+            )
+            .add_sub_option(CreateCommandOption::new(
+                CommandOptionType::Boolean,
+                "confirm",
+                "Confirm deleting this tier and its role mappings",
+            )),
+        )
         .add_option(CreateCommandOption::new(
             CommandOptionType::SubCommand,
             "list",
@@ -84,6 +100,45 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
                 .ok_or_else(|| AppError::InvalidInput("moderator is required".into()))?;
             repo.create_tier(internal_guild_id, name, moderator).await?;
             format!("Role tier `{name}` created.")
+        }
+        "remove" => {
+            let name = subcommand_options
+                .iter()
+                .find(|o| o.name == "name")
+                .and_then(|o| match &o.value {
+                    CommandDataOptionValue::String(value) => Some(value.trim()),
+                    _ => None,
+                })
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| AppError::InvalidInput("name is required".into()))?;
+            let confirm = subcommand_options
+                .iter()
+                .find(|o| o.name == "confirm")
+                .and_then(|o| match o.value {
+                    CommandDataOptionValue::Boolean(value) => Some(value),
+                    _ => None,
+                })
+                .unwrap_or(false);
+            let tier = repo
+                .find_tier_by_name(internal_guild_id, name)
+                .await?
+                .ok_or_else(|| {
+                    AppError::InvalidInput(format!("role tier `{name}` does not exist"))
+                })?;
+            let mapping_count = repo.count_role_mappings_for_tier(tier.id).await?;
+            if mapping_count > 0 && !confirm {
+                return Err(AppError::InvalidInput(format!(
+                    "tier `{name}` has {mapping_count} role mapping(s); re-run with `confirm:true` to delete the tier and cascade-delete its mappings"
+                )));
+            }
+            repo.delete_tier(tier.id).await?;
+            if mapping_count == 0 {
+                format!("Role tier `{name}` removed.")
+            } else {
+                format!(
+                    "Role tier `{name}` removed; {mapping_count} role mapping(s) cascade-deleted."
+                )
+            }
         }
         "list" => {
             let tiers = repo.list_tiers(internal_guild_id).await?;

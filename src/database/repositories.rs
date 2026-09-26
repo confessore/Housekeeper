@@ -185,6 +185,30 @@ impl RoleRepository {
             .await?;
         Ok(())
     }
+    pub async fn unmap_role(&self, guild_id: i64, role_id: &str) -> AppResult<bool> {
+        let result =
+            sqlx::query("DELETE FROM role_mappings WHERE guild_id=$1 AND discord_role_id=$2")
+                .bind(guild_id)
+                .bind(role_id)
+                .execute(&self.pool)
+                .await?;
+        Ok(result.rows_affected() > 0)
+    }
+    pub async fn count_role_mappings_for_tier(&self, tier_id: i64) -> AppResult<i64> {
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM role_mappings WHERE role_tier_id=$1")
+                .bind(tier_id)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(count)
+    }
+    pub async fn delete_tier(&self, tier_id: i64) -> AppResult<()> {
+        sqlx::query("DELETE FROM role_tiers WHERE id=$1")
+            .bind(tier_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
     pub async fn resolve(&self, guild_id: i64, user_id: &str) -> AppResult<Option<RoleTier>> {
         let row=sqlx::query_as::<_,(i64,i64,String,bool)>("SELECT rt.id,rt.guild_id,rt.name,rt.is_moderator FROM member_roles_cache mc JOIN role_mappings rm ON rm.discord_role_id=mc.discord_role_id JOIN role_tiers rt ON rt.id=rm.role_tier_id JOIN guilds g ON g.id=rm.guild_id AND g.discord_guild_id=$1 JOIN discord_roles_cache rc ON rc.discord_role_id=mc.discord_role_id WHERE mc.user_discord_id=$2 ORDER BY rc.position DESC LIMIT 1").bind(guild_id).bind(user_id).fetch_optional(&self.pool).await?;
         Ok(row.map(|r| RoleTier {

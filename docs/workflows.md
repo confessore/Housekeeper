@@ -43,7 +43,7 @@ flowchart LR
 
 ## First-guild setup
 
-A Discord Administrator or a member with a configured moderator tier can configure a guild. The normal first setup is to create at least one tier, then map one or more existing Discord roles to it. Role and member synchronization keeps the cache used by authorization and rank display current.
+A Discord Administrator or a member with a configured moderator tier can configure a guild. The normal first setup is to create at least one tier, then map one or more existing Discord roles to it. Use the `remove` subcommands to remove mappings or tiers. Removing a tier with mappings requires `confirm:true`; the database then cascade-deletes all mappings for that tier. Role and member synchronization keeps the cache used by authorization and rank display current.
 
 ```mermaid
 sequenceDiagram
@@ -60,12 +60,26 @@ sequenceDiagram
     DB-->>Bot: Tier created
     Bot-->>Discord: Ephemeral confirmation
 
-    Admin->>Discord: /admin-role-map <discord_role> <tier>
+    Admin->>Discord: /admin-role-map set <discord_role> <tier>
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify role-manager permission
     Bot->>DB: Find tier in current guild
     Bot->>DB: Store role-to-tier mapping
     DB-->>Bot: Mapping saved
+    Bot-->>Discord: Ephemeral confirmation
+
+    Admin->>Discord: /admin-role-map remove <discord_role>
+    Discord->>Bot: Command interaction
+    Bot->>Bot: Verify role-manager permission
+    Bot->>DB: Delete role-to-tier mapping
+    DB-->>Bot: Mapping removed
+    Bot-->>Discord: Ephemeral confirmation
+
+    Admin->>Discord: /admin-role-tier remove <name> confirm:true
+    Discord->>Bot: Command interaction
+    Bot->>Bot: Verify role-manager permission and mapping count
+    Bot->>DB: Delete tier; cascade-delete its mappings
+    DB-->>Bot: Tier and mappings removed
     Bot-->>Discord: Ephemeral confirmation
 ```
 

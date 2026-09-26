@@ -19,7 +19,7 @@ Use `/help command:<command>` for detailed usage, options, and permissions for o
 `/lobby-seed <number> [count]` — Developer-only synthetic roster for balance testing.
 `/lobby [number]` — Show a numbered lobby, or your current lobby.
 `/lobby-balance <number>` — Show a numbered lobby split into balanced Radiant and Dire teams.
-`/admin-role-tier`, `/admin-role-map` — Configure guild role tiers and role mappings.
+`/admin-role-tier`, `/admin-role-map` — Create, list, map, and remove guild role tiers and role mappings.
 `/warn`, `/ban`, `/unban`, `/history` — Manage and inspect inhouse moderation history.
 
 Guild Administrators or members in a moderator tier can configure the guild. Moderation and lobby management commands require the configured moderator permission.";
@@ -75,11 +75,11 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "admin-role-tier",
-        "**/admin-role-tier**\nCreate or list this server's role tiers.\n\n**Permissions**\nRequires Administrator or the configured role-manager permission. The `create` subcommand defines whether a tier can manage Housekeeper.",
+        "**/admin-role-tier**\nCreate, list, or remove this server's role tiers.\n\n**Subcommands**\n• `create` — Add a tier and define whether it can manage Housekeeper.\n• `list` — Show configured tiers.\n• `remove` — Remove a tier by name. If it has role mappings, re-run with `confirm:true` to cascade-delete them.\n\n**Permissions**\nRequires Administrator or the configured role-manager permission.",
     ),
     (
         "admin-role-map",
-        "**/admin-role-map <discord_role> <tier>**\nMap a Discord role to a configured role tier in this server.\n\n**Permissions**\nRequires Administrator or the configured role-manager permission.",
+        "**/admin-role-map**\nManage Discord role mappings for configured tiers.\n\n**Subcommands**\n• `set <discord_role> <tier>` — Create or update a mapping.\n• `remove <discord_role>` — Remove a mapping.\n\n**Permissions**\nRequires Administrator or the configured role-manager permission.",
     ),
     (
         "warn",
