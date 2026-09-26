@@ -1,0 +1,18 @@
+use super::moderation_common::run_infraction;
+use crate::{discord::bot::DiscordBot, models::InfractionKind, utils::error::AppResult};
+use serenity::all::{
+    CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption,
+};
+pub fn register() -> CreateCommand {
+    CreateCommand::new("unban")
+        .description("Restore a player's inhouse access")
+        .add_option(
+            CreateCommandOption::new(CommandOptionType::User, "user", "Player").required(true),
+        )
+        .add_option(
+            CreateCommandOption::new(CommandOptionType::String, "reason", "Reason").required(true),
+        )
+}
+pub async fn run(ctx: &Context, c: &CommandInteraction, b: &DiscordBot) -> AppResult<()> {
+    run_infraction(ctx, c, b, InfractionKind::Unban).await
+}
