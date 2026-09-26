@@ -41,7 +41,7 @@ pub fn validate_join(
 ) -> AppResult<()> {
     if !has_steam {
         return Err(AppError::InvalidInput(
-            "link your Steam account with /link-steam before joining the lobby".into(),
+            "link your Steam account with /register before joining the lobby".into(),
         ));
     }
     if banned {

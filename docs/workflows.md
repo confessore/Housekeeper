@@ -75,18 +75,18 @@ The command reads the caller's current voice channel from Discord's cache, exclu
 
 ```mermaid
 flowchart TD
-    A[/whoishere] --> B{Caller in a voice channel?}
-    B -->|No| C[Return validation error]
-    B -->|Yes| D[Read members in caller's channel]
-    D --> E[Exclude bots]
-    E --> F[Load or create Housekeeper users]
-    F --> G[Skip inhouse-banned users]
-    G --> H[Resolve rank and guild role tier]
-    H --> I[Sort players by rank]
-    I --> J{balance = true?}
-    J -->|No| K[Return player list]
-    J -->|Yes| L[Split players into Radiant and Dire]
-    L --> M[Return player list and teams]
+    A["/whoishere"] --> B{"Caller in a voice channel?"}
+    B -->|No| C["Return validation error"]
+    B -->|Yes| D["Read members in caller's channel"]
+    D --> E["Exclude bots"]
+    E --> F["Load or create Housekeeper users"]
+    F --> G["Skip inhouse-banned users"]
+    G --> H["Resolve rank and guild role tier"]
+    H --> I["Sort players by rank"]
+    I --> J{"balance = true?"}
+    J -->|No| K["Return player list"]
+    J -->|Yes| L["Split players into Radiant and Dire"]
+    L --> M["Return player list and teams"]
 ```
 
 ## Moderation workflow
@@ -117,16 +117,16 @@ sequenceDiagram
 
 ## Steam and rank refresh
 
-`/link-steam` accepts the caller's 8-digit Steam friend code, with or without a dash. The bot uses that numeric friend code as the OpenDota account identifier, refreshes cached Dota data, and stores the friend code. The API key is read from environment configuration and is never included in Discord responses.
+`/register` accepts the caller's 8-digit Steam friend code, with or without a dash. The bot uses that numeric friend code as the OpenDota account identifier, refreshes cached Dota data, and stores the friend code. The API key is read from environment configuration and is never included in Discord responses.
 
 ```mermaid
 flowchart LR
-    A[/link-steam <friend_code>] --> B[Parse 8-digit friend code]
-    B -->|Invalid| C[Return validation error]
-    B -->|Valid| D[Find or create caller]
-    D --> E[Fetch and cache OpenDota data]
-    E --> F[Store friend code and rank data]
-    F --> G[Return refresh confirmation]
+    A["/register <friend_code>"] --> B["Parse 8-digit friend code"]
+    B -->|Invalid| C["Return validation error"]
+    B -->|Valid| D["Find or create caller"]
+    D --> E["Fetch and cache OpenDota data"]
+    E --> F["Store friend code and rank data"]
+    F --> G["Return refresh confirmation"]
 ```
 
 ## Concurrent numbered lobby workflow
@@ -137,31 +137,48 @@ Players create a lobby with `/lobby-create [hours]`, then join it with `/lobby-j
 
 A player must have linked Steam data and must not be inhouse-banned. Joining or being added refreshes the player's OpenDota rank and win/loss data so the lobby uses current data; a bounded retry policy handles rate limits and cached data is used if refresh ultimately fails. Moderators can use `/lobby-add <number> <user>` and `/lobby-remove <number> <user>` after permission verification. Expired lobbies are cleaned up lazily during lobby operations, and their memberships are removed by the database foreign-key cascade. A player can be in voice without being in any lobby, so spectators and other queues do not affect a lobby's teams.
 
+### Lobby balance workflow
+
+`/lobby-balance <number>` requires a numbered lobby and can only run in a guild. The bot loads the guild-scoped lobby and its membership snapshots, then displays each player's rank and win/loss record before splitting the roster into Radiant and Dire. Ranked players are scored by rank; unranked players receive a score estimated from their wins, losses, and game count. The sorted roster is distributed alternately between the two teams, so the command reports the current lobby roster and the resulting teams without changing membership.
+
+```mermaid
+flowchart LR
+    A["/lobby-balance <number>"] --> B{"Guild context and lobby number?"}
+    B -->|No| C["Return validation error"]
+    B -->|Yes| D["Load guild-scoped lobby"]
+    D --> E{"Lobby exists and is not expired?"}
+    E -->|No| F["Return lobby not found or expired"]
+    E -->|Yes| G["Load members and join-time snapshots"]
+    G --> H["Sort roster by balance score"]
+    H --> I["Split players alternately into Radiant and Dire"]
+    I --> J["Return roster, records, and teams"]
+```
+
 ```mermaid
 flowchart TD
-    A[Player runs /lobby-create hours] --> B{Assign smallest free number}
-    B -->|No| C[Return validation error]
-    B -->|Yes| D[Create guild-scoped numbered lobby with expiry]
-    D --> E[Player runs /lobby-join number]
-    E --> F{Another active lobby membership?}
-    F -->|Yes| G[Ask player to leave current lobby first]
-    F -->|No| H{Steam linked and not banned?}
-    H -->|No| I[Return validation error]
-    H -->|Yes| J{Lobby has fewer than 10?}
-    J -->|No| K[Return lobby full]
-    J -->|Yes| L[Refresh OpenDota rank and W-L with bounded retries]
-    L --> M{Refresh succeeded?}
-    M -->|No| N[Use cached rank and W-L]
-    M -->|Yes| O[Snapshot refreshed rank and W-L]
-    N --> P[Add member to selected lobby]
+    A["Player runs /lobby-create hours"] --> B{"Assign smallest free number"}
+    B -->|No| C["Return validation error"]
+    B -->|Yes| D["Create guild-scoped numbered lobby with expiry"]
+    D --> E["Player runs /lobby-join number"]
+    E --> F{"Another active lobby membership?"}
+    F -->|Yes| G["Ask player to leave current lobby first"]
+    F -->|No| H{"Steam linked and not banned?"}
+    H -->|No| I["Return validation error"]
+    H -->|Yes| J{"Lobby has fewer than 10?"}
+    J -->|No| K["Return lobby full"]
+    J -->|Yes| L["Refresh OpenDota rank and W-L with bounded retries"]
+    L --> M{"Refresh succeeded?"}
+    M -->|No| N["Use cached rank and W-L"]
+    M -->|Yes| O["Snapshot refreshed rank and W-L"]
+    N --> P["Add member to selected lobby"]
     O --> P
-    Q[Moderator runs /lobby-add or /lobby-remove number user] --> R[Verify moderator tier]
+    Q["Moderator runs /lobby-add or /lobby-remove number user"] --> R["Verify moderator tier"]
     R --> L
-    P --> S[/lobby-balance number]
-    S --> T[List selected lobby members using join-time snapshots]
-    T --> U[Split into Radiant and Dire]
-    U --> V[Return roster and teams]
-    X[/lobby-list] --> Y[List all active named lobbies and expiry]
-    Z[/lobby-close number] --> AA[Verify moderator tier and close lobby]
-    AB[Expiry reached] --> AC[Lazy cleanup removes lobby and members]
+    P --> S["/lobby-balance number"]
+    S --> T["List selected lobby members using join-time snapshots"]
+    T --> U["Split into Radiant and Dire"]
+    U --> V["Return roster and teams"]
+    X["/lobby-list"] --> Y["List all active named lobbies and expiry"]
+    Z["/lobby-close number"] --> AA["Verify moderator tier and close lobby"]
+    AB["Expiry reached"] --> AC["Lazy cleanup removes lobby and members"]
 ```

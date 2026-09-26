@@ -8,7 +8,7 @@ use serenity::all::{
     CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 pub fn register() -> CreateCommand {
-    CreateCommand::new("link-steam")
+    CreateCommand::new("register")
         .description("Link your Steam friend code and refresh Dota data")
         .add_option(
             CreateCommandOption::new(

@@ -12,7 +12,7 @@ const HELP_TEXT: &str = "**Housekeeper commands**
 Use `/help command:<command>` for detailed usage, options, and permissions for one command.
 
 `/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record.
-`/link-steam <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.
+`/register <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.
 `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — Manage numbered lobbies. Numbers are assigned automatically and reused when available; lobbies expire within 24 hours.
 `/lobby-join <number>`, `/lobby-leave` — Join or leave a numbered lobby. Each player can be in one lobby per server.
 `/lobby-add <number> <user>`, `/lobby-remove <number> <user>` — Moderator-only lobby membership management.
@@ -30,8 +30,8 @@ const COMMAND_HELP: &[(&str, &str)] = &[
         "**/whoishere**\nList non-bot players in your current voice channel.\n\n**Options**\n• `balance` (optional) — Split the players into two balanced teams.\n\nThis is a voice-channel scan, not a lobby roster.",
     ),
     (
-        "link-steam",
-        "**/link-steam <friend_code>**\nLink your 8-digit Steam friend code and refresh your cached rank and win/loss data. The code may be entered as `12345678` or `1234-5678`.",
+        "register",
+        "**/register <friend_code>**\nLink your 8-digit Steam friend code and refresh your cached rank and win/loss data. The code may be entered as `12345678` or `1234-5678`.",
     ),
     (
         "lobby-create",

@@ -31,7 +31,7 @@ impl EventHandler for Handler {
             let result = match command.data.name.as_str() {
                 "help" => commands::help::run(&ctx, &command, &self.bot).await,
                 "whoishere" => commands::whoishere::run(&ctx, &command, &self.bot).await,
-                "link-steam" => commands::link_steam::run(&ctx, &command, &self.bot).await,
+                "register" => commands::register::run(&ctx, &command, &self.bot).await,
                 "lobby" => commands::lobby::run(&ctx, &command, &self.bot).await,
                 "lobby-balance" => commands::lobby_balance::run(&ctx, &command, &self.bot).await,
                 "lobby-create" => commands::lobby_create::run(&ctx, &command, &self.bot).await,
