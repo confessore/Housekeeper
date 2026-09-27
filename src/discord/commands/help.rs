@@ -16,7 +16,7 @@ Use `/housekeeper` for a private navigation hub, or `/help command:<command>` fo
 `/register <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.
 `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — Manage numbered lobbies. Numbers are assigned automatically and reused when available; lobbies expire within 24 hours.
 `/lobby-join <number>`, `/lobby-leave` — Join or leave a numbered lobby. Each player can be in one lobby per server.
-`/lobby-add <number> <user>`, `/lobby-remove <number> <user>` — Moderator-only lobby membership management.
+`/lobby-add <number> <user>`, `/lobby-remove <user>` — Moderator-only lobby membership management. A player can only be in one active lobby per server, so removal resolves the target's current lobby automatically.
 `/lobby-seed <number> [count]` — Developer-only synthetic roster for balance testing.
 `/lobby [number]` — Show a numbered lobby, or your current lobby.
 `/lobby-balance <number>` — Show a numbered lobby split into balanced Radiant and Dire teams.
@@ -52,23 +52,23 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "lobby-join",
-        "**/lobby-join <number>**\nJoin an active numbered lobby.\n\n**Requirements**\n• Steam must be linked.\n• You must not be inhouse-banned.\n• You may only belong to one active lobby in this server.\n• The lobby must have fewer than 10 players.",
+        "**/lobby-join <number>**\nJoin an active numbered lobby. The response opens the same shared lobby panel as the `Join` button.\n\n**Requirements**\n• Steam must be linked.\n• You must not be inhouse-banned.\n• You may only belong to one active lobby in this server.\n• The lobby must have fewer than 10 players.",
     ),
     (
         "lobby-leave",
-        "**/lobby-leave**\nLeave your current active lobby. You do not need to provide its name.",
+        "**/lobby-leave**\nLeave your current active lobby. You do not need to provide its name. The response opens the same shared lobby panel as the `Leave` button.",
     ),
     (
         "lobby-add",
-        "**/lobby-add <number> <user>**\nAdd a Steam-linked player to a numbered lobby.\n\n**Permissions**\nRequires the configured moderator permission. A player may only belong to one active lobby in this server.",
+        "**/lobby-add <number> <user>**\nAdd a Steam-linked player to a numbered lobby. The response opens the same shared lobby panel as the `Manage` controls.\n\n**Permissions**\nRequires the configured moderator permission. A player may only belong to one active lobby in this server.",
     ),
     (
         "lobby-remove",
-        "**/lobby-remove <number> <user>**\nRemove a player from a numbered lobby.\n\n**Permissions**\nRequires the configured moderator permission.",
+        "**/lobby-remove <user>**\nRemove a player from their current active lobby. The response opens the same shared lobby panel as the `Manage` controls; the lobby number is resolved automatically because a player can only belong to one active lobby per server.\n\n**Permissions**\nRequires the configured moderator permission.",
     ),
     (
         "lobby",
-        "**/lobby [number]**\nShow a lobby roster. If `number` is omitted, your current lobby is shown. The response includes shared `Join`, `Leave`, `Balance teams`, `Refresh`, `Manage`, and navigation buttons.\n\n**Options**\n• `number` (optional) — Numbered lobby to display.",
+        "**/lobby [number]**\nShow a lobby roster. If `number` is omitted, your current lobby is shown. The response includes shared `Join`, `Leave`, `Balance teams`, `Refresh`, and `Manage` buttons.\n\n**Options**\n• `number` (optional) — Numbered lobby to display.",
     ),
     (
         "lobby-balance",

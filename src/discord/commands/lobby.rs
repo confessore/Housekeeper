@@ -5,8 +5,7 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
-    GuildId,
+    CreateCommandOption, CreateEmbed, GuildId,
 };
 
 pub fn register() -> CreateCommand {
@@ -151,38 +150,5 @@ async fn run_with_balance(
                 .0
         }
     };
-    let embed = build_embed(
-        ctx,
-        bot,
-        guild,
-        Some(lobby.number),
-        &c.user.id.to_string(),
-        balance,
-    )
-    .await?;
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .embed(embed)
-                .components(crate::discord::components::lobby_buttons(
-                    lobby.number,
-                    lobby.id,
-                    balance,
-                )),
-        ),
-    )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
-    if let Ok(message) = c.get_response(&ctx.http).await {
-        bot.panel_registry.remember(
-            crate::discord::panel_registry::PanelKey {
-                scope: "lobby".into(),
-                key: lobby.id.to_string(),
-                channel_id: c.channel_id,
-            },
-            message.id,
-        );
-    }
-    Ok(())
+    crate::discord::components::send_lobby_panel(ctx, c, bot, lobby.number, lobby.id, balance).await
 }

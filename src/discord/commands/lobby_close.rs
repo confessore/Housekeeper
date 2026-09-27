@@ -34,10 +34,13 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         })
         .ok_or_else(|| AppError::InvalidInput("lobby number is required".into()))?;
     lobby_service::close(&bot.pool, guild.get() as i64, number).await?;
+    let (embed, components) = crate::discord::components::ended(number);
     c.create_response(
         ctx,
         CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new().content("Lobby closed."),
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(components),
         ),
     )
     .await

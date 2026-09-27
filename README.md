@@ -9,7 +9,7 @@ Housekeeper is a modular Rust Discord bot for inhouse communities. One bot insta
 - `/whoishere [balance]` — list non-bot players in your current voice channel, ordered by rank. Each linked player includes OpenDota, Dotabuff, and Stratz profile links. This is an ad-hoc voice scan, not the official lobby.
 - `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — create, inspect, or close numbered 10-player lobbies. Numbers are assigned automatically, reuse the smallest available number, and lobbies expire within 24 hours.
 - `/lobby-join <number>`, `/lobby-leave` — join or leave a numbered lobby. A player can be in only one lobby per server, and a linked Steam account is required. Rank and win/loss data are refreshed when joining, with cached data used if OpenDota is unavailable.
-- `/lobby-add <number> <user>`, `/lobby-remove <number> <user>` — moderator-only lobby membership management; adding a player also refreshes their OpenDota rank and win/loss data.
+- `/lobby-add <number> <user>`, `/lobby-remove <user>` — moderator-only lobby membership management; removal resolves the target's current lobby automatically because a player can only be in one active lobby per server. Adding a player also refreshes their OpenDota rank and win/loss data.
 - `/lobby-seed <number> [count]` — developer-only test helper that adds up to 10 synthetic players with varied ranks for balance testing; requires `DEVELOPER_DISCORD_IDS`.
 - `/lobby [number]` — list a numbered lobby (or your current lobby), including rank badges and Dota profile links for linked players.
 - `/lobby-balance <number>` — list a numbered lobby split into balanced Radiant and Dire teams.

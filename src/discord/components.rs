@@ -86,7 +86,50 @@ async fn panel(
     Ok((embed, lobby_buttons(number, id, balanced)))
 }
 
-fn ended(number: i32) -> (CreateEmbed, Vec<CreateActionRow>) {
+pub(crate) async fn send_lobby_panel(
+    ctx: &Context,
+    c: &CommandInteraction,
+    bot: &DiscordBot,
+    number: i32,
+    id: i64,
+    balanced: bool,
+) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let embed = commands::lobby::build_embed(
+        ctx,
+        bot,
+        guild,
+        Some(number),
+        &c.user.id.to_string(),
+        balanced,
+    )
+    .await?;
+    c.create_response(
+        ctx,
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(lobby_buttons(number, id, balanced)),
+        ),
+    )
+    .await
+    .map_err(|error| AppError::Discord(error.to_string()))?;
+    if let Ok(message) = c.get_response(&ctx.http).await {
+        bot.panel_registry.remember(
+            PanelKey {
+                scope: "lobby".into(),
+                key: id.to_string(),
+                channel_id: c.channel_id,
+            },
+            message.id,
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn ended(number: i32) -> (CreateEmbed, Vec<CreateActionRow>) {
     (
         CreateEmbed::new()
             .title(format!("Lobby #{number} has ended"))

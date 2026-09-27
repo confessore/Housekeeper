@@ -249,6 +249,21 @@ pub async fn remove(pool: &PgPool, guild_id: i64, number: i32, discord_id: &str)
     Ok(())
 }
 
+pub async fn remove_from_current(
+    pool: &PgPool,
+    guild_id: i64,
+    discord_id: &str,
+) -> AppResult<Lobby> {
+    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let repo = LobbyRepository::new(pool);
+    let lobby = repo
+        .find_current_for_member(guild_id, discord_id)
+        .await?
+        .ok_or_else(|| AppError::InvalidInput("that player is not in a lobby".into()))?;
+    repo.remove(lobby.id, discord_id).await?;
+    Ok(lobby)
+}
+
 pub async fn close(pool: &PgPool, guild_id: i64, number: i32) -> AppResult<()> {
     let guild_id = resolve_guild_id(pool, guild_id).await?;
     if !LobbyRepository::new(pool).close(guild_id, number).await? {

@@ -6,16 +6,12 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+    CreateCommandOption,
 };
 
 pub fn register() -> CreateCommand {
     CreateCommand::new("lobby-remove")
-        .description("Remove a player from a lobby")
-        .add_option(
-            CreateCommandOption::new(CommandOptionType::Integer, "number", "Lobby number")
-                .required(true),
-        )
+        .description("Remove a player from their current lobby")
         .add_option(
             CreateCommandOption::new(CommandOptionType::User, "user", "Player").required(true),
         )
@@ -26,16 +22,6 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         .guild_id
         .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
     require_role_manager(c, bot, guild.get() as i64).await?;
-    let number = c
-        .data
-        .options
-        .iter()
-        .find(|option| option.name == "number")
-        .and_then(|option| match option.value {
-            CommandDataOptionValue::Integer(value) => i32::try_from(value).ok(),
-            _ => None,
-        })
-        .ok_or_else(|| AppError::InvalidInput("lobby number is required".into()))?;
     let target = c
         .data
         .options
@@ -46,14 +32,6 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
             _ => None,
         })
         .ok_or_else(|| AppError::InvalidInput("user is required".into()))?;
-    lobby_service::remove(&bot.pool, guild.get() as i64, number, &target).await?;
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new().content("Player removed from the lobby."),
-        ),
-    )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
-    Ok(())
+    let lobby = lobby_service::remove_from_current(&bot.pool, guild.get() as i64, &target).await?;
+    crate::discord::components::send_lobby_panel(ctx, c, bot, lobby.number, lobby.id, false).await
 }

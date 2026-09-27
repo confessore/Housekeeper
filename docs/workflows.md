@@ -162,7 +162,7 @@ flowchart LR
 
 Players create a lobby with `/lobby-create [hours]`, then join it with `/lobby-join <number>` using the number returned by the bot. A player may belong to only one active lobby in a guild, so attempting to join another lobby is rejected until they use `/lobby-leave`. `/lobby` accepts an optional number; without one, it displays the caller's current lobby. `/lobby-balance` displays a numbered lobby split into balanced Radiant and Dire teams. `/lobby-list` shows all active lobbies and their remaining lifetime.
 
-A player must have linked Steam data and must not be inhouse-banned. Joining or being added refreshes the player's OpenDota rank and win/loss data so the lobby uses current data; a bounded retry policy handles rate limits and cached data is used if refresh ultimately fails. Moderators can use `/lobby-add <number> <user>` and `/lobby-remove <number> <user>` after permission verification. Expired lobbies are cleaned up lazily during lobby operations, and their memberships are removed by the database foreign-key cascade. A player can be in voice without being in any lobby, so spectators and other queues do not affect a lobby's teams.
+A player must have linked Steam data and must not be inhouse-banned. Joining or being added refreshes the player's OpenDota rank and win/loss data so the lobby uses current data; a bounded retry policy handles rate limits and cached data is used if refresh ultimately fails. Moderators can use `/lobby-add <number> <user>` and `/lobby-remove <user>` after permission verification; removal resolves the target's current lobby automatically because a player can only belong to one active lobby per guild. Expired lobbies are cleaned up lazily during lobby operations, and their memberships are removed by the database foreign-key cascade. A player can be in voice without being in any lobby, so spectators and other queues do not affect a lobby's teams.
 
 ### Lobby balance workflow
 
@@ -199,7 +199,7 @@ flowchart TD
     M -->|Yes| O["Snapshot refreshed rank and W-L"]
     N --> P["Add member to selected lobby"]
     O --> P
-    Q["Moderator runs /lobby-add or /lobby-remove number user"] --> R["Verify moderator tier"]
+    Q["Moderator runs /lobby-add number user or /lobby-remove user"] --> R["Verify moderator tier"]
     R --> L
     P --> S["/lobby-balance number"]
     S --> T["List selected lobby members using join-time snapshots"]

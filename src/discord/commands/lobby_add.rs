@@ -7,7 +7,7 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+    CreateCommandOption,
 };
 
 pub fn register() -> CreateCommand {
@@ -62,13 +62,6 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         &bot.rank_service,
     )
     .await?;
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new().content("Player added to the lobby."),
-        ),
-    )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
-    Ok(())
+    let lobby = lobby_service::resolve(&bot.pool, guild.get() as i64, number).await?;
+    crate::discord::components::send_lobby_panel(ctx, c, bot, lobby.number, lobby.id, false).await
 }
