@@ -5,8 +5,7 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
-    InteractionResponseFlags,
+    CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 
 pub fn register() -> CreateCommand {
@@ -66,20 +65,12 @@ async fn run_with_balance(
         &c.user.id.to_string(),
     )
     .await?;
-    let mut text = format!(
-        "**Lobby #{}** ({} / 10 players)\n",
+    let mut embed = CreateEmbed::new().title(format!(
+        "Lobby #{} ({} / 10 players)",
         lobby.number,
         players.len()
-    );
+    ));
     for player in &players {
-        let label = player_label(player);
-        text.push_str(&format!(
-            "• {label} — {} | {}-{} ({} games)\n",
-            bot.rank_emojis.label(player.rank),
-            player.wins,
-            player.losses,
-            player.games
-        ));
         let links = if let Some(account_id) = player.account_id {
             dota_profile_links::markdown_line(account_id)
         } else {
@@ -89,26 +80,40 @@ async fn run_with_balance(
                 dota_profile_links::markdown_home_line()
             )
         };
-        text.push_str(&format!("  {links}\n"));
+        embed = embed.field(
+            format!(
+                "{} {}",
+                bot.rank_emojis.label(player.rank),
+                player_label(player)
+            ),
+            format!(
+                "{}-{} ({} games)\n{links}",
+                player.wins, player.losses, player.games
+            ),
+            false,
+        );
     }
     if balance {
         let teams = balance_service::split(&players);
-        text.push_str("\n**Radiant**\n");
-        for player in teams.first {
-            text.push_str(&format!("{} ", player_label(&player)));
-        }
-        text.push_str("\n**Dire**\n");
-        for player in teams.second {
-            text.push_str(&format!("{} ", player_label(&player)));
-        }
+        let radiant = teams
+            .first
+            .iter()
+            .map(player_label)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let dire = teams
+            .second
+            .iter()
+            .map(player_label)
+            .collect::<Vec<_>>()
+            .join(" ");
+        embed = embed
+            .field("Radiant", radiant, false)
+            .field("Dire", dire, false);
     }
     c.create_response(
         ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .content(text)
-                .flags(InteractionResponseFlags::SUPPRESS_EMBEDS),
-        ),
+        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().embed(embed)),
     )
     .await
     .map_err(|error| AppError::Discord(error.to_string()))?;

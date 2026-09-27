@@ -20,6 +20,7 @@ pub mod warn;
 pub mod whoishere;
 
 use serenity::all::CreateCommand;
+
 pub fn all() -> Vec<CreateCommand> {
     vec![
         help::register(),

@@ -6,8 +6,7 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
-    InteractionResponseFlags,
+    CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 pub fn register() -> CreateCommand {
     CreateCommand::new("whoishere")
@@ -69,45 +68,72 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         }
     }
     whoishere_service::sort_players(&mut players);
-    let mut text = format!("**Who is here?** ({} players)\n", players.len());
-    for p in &players {
-        text.push_str(&format!(
-            "• <@{}> — {} | {}-{} ({} games)\n",
-            p.discord_id,
-            bot.rank_emojis.label(p.rank),
-            p.wins,
-            p.losses,
-            p.games
-        ));
-        let links = if let Some(account_id) = p.account_id {
+    const MAX_PLAYER_FIELDS: usize = 20;
+    let mut embed = CreateEmbed::new().title(format!("Who is here? ({} players)", players.len()));
+    for player in players.iter().take(MAX_PLAYER_FIELDS) {
+        let links = if let Some(account_id) = player.account_id {
             dota_profile_links::markdown_line(account_id)
         } else {
-            let dummy_code = lobby_seed_service::dummy_friend_code(&p.discord_id);
+            let dummy_code = lobby_seed_service::dummy_friend_code(&player.discord_id);
             format!(
                 "{} · `{dummy_code}`",
                 dota_profile_links::markdown_home_line()
             )
         };
-        text.push_str(&format!("  {links}\n"));
+        embed = embed.field(
+            format!(
+                "{} <@{}>",
+                bot.rank_emojis.label(player.rank),
+                player.discord_id
+            ),
+            format!(
+                "{}-{} ({} games)\n{links}",
+                player.wins, player.losses, player.games
+            ),
+            false,
+        );
+    }
+    if players.len() > MAX_PLAYER_FIELDS {
+        embed = embed.field(
+            "…",
+            format!(
+                "+{} more players not shown",
+                players.len() - MAX_PLAYER_FIELDS
+            ),
+            false,
+        );
     }
     if balance {
         let teams = balance_service::split(&players);
-        text.push_str("\n**Radiant**\n");
-        for p in teams.first {
-            text.push_str(&format!("<@{}> ", p.discord_id));
-        }
-        text.push_str("\n**Dire**\n");
-        for p in teams.second {
-            text.push_str(&format!("<@{}> ", p.discord_id));
-        }
+        let truncate_team = |team: Vec<String>| {
+            let team = team.join(" ");
+            if team.chars().count() <= 1_024 {
+                team
+            } else {
+                format!("{}…", team.chars().take(1_023).collect::<String>())
+            }
+        };
+        let radiant = truncate_team(
+            teams
+                .first
+                .iter()
+                .map(|player| format!("<@{}>", player.discord_id))
+                .collect(),
+        );
+        let dire = truncate_team(
+            teams
+                .second
+                .iter()
+                .map(|player| format!("<@{}>", player.discord_id))
+                .collect(),
+        );
+        embed = embed
+            .field("Radiant", radiant, false)
+            .field("Dire", dire, false);
     }
     c.create_response(
         ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .content(text)
-                .flags(InteractionResponseFlags::SUPPRESS_EMBEDS),
-        ),
+        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().embed(embed)),
     )
     .await
     .map_err(|e| AppError::Discord(e.to_string()))?;
