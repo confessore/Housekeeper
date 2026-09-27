@@ -44,7 +44,10 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
             .values()
             .map(|member| whoishere_service::VoiceMember {
                 discord_id: member.user.id.to_string(),
-                username: member.user.name.clone(),
+                username: member
+                    .nick
+                    .clone()
+                    .unwrap_or_else(|| member.user.name.clone()),
                 bot: member.user.bot,
                 channel_id: data
                     .voice_states
@@ -82,15 +85,15 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         };
         embed = embed.field(
             format!(
-                "{} <@{}>",
+                "{} {}",
                 bot.rank_emojis.label(player.rank),
-                player.discord_id
+                player.display_name
             ),
             format!(
-                "{}-{} ({} games)\n{links}",
-                player.wins, player.losses, player.games
+                "<@{}>\n{}-{} ({} games)\n{links}",
+                player.discord_id, player.wins, player.losses, player.games
             ),
-            false,
+            true,
         );
     }
     if players.len() > MAX_PLAYER_FIELDS {

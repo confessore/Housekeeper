@@ -28,6 +28,28 @@ fn player_label(player: &crate::services::whoishere_service::PlayerView) -> Stri
     }
 }
 
+fn server_display_name(
+    ctx: &Context,
+    guild: serenity::all::GuildId,
+    player: &crate::services::whoishere_service::PlayerView,
+) -> String {
+    let Some(id) = player.discord_id.parse::<u64>().ok() else {
+        return player.display_name.clone();
+    };
+    let Some(data) = ctx.cache.guild(guild) else {
+        return player.display_name.clone();
+    };
+    data.members
+        .get(&serenity::all::UserId::new(id))
+        .map(|member| {
+            member
+                .nick
+                .clone()
+                .unwrap_or_else(|| member.user.name.clone())
+        })
+        .unwrap_or_else(|| player.display_name.clone())
+}
+
 pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
     run_with_balance(ctx, c, bot, false).await
 }
@@ -84,13 +106,16 @@ async fn run_with_balance(
             format!(
                 "{} {}",
                 bot.rank_emojis.label(player.rank),
-                player_label(player)
+                server_display_name(ctx, guild, player)
             ),
             format!(
-                "{}-{} ({} games)\n{links}",
-                player.wins, player.losses, player.games
+                "{}\n{}-{} ({} games)\n{links}",
+                player_label(player),
+                player.wins,
+                player.losses,
+                player.games
             ),
-            false,
+            true,
         );
     }
     if balance {
