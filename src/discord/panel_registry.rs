@@ -26,6 +26,38 @@ impl PanelRegistry {
         }
     }
 
+    fn take(&self, key: &PanelKey) -> Option<serenity::all::MessageId> {
+        self.messages
+            .lock()
+            .ok()
+            .and_then(|mut messages| messages.remove(key))
+    }
+
+    pub async fn evict(&self, http: impl CacheHttp, key: &PanelKey) {
+        if let Some(message_id) = self.take(key) {
+            let _ = key.channel_id.delete_message(http.http(), message_id).await;
+        }
+    }
+
+    pub async fn bump(
+        &self,
+        http: impl CacheHttp,
+        key: PanelKey,
+        embed: CreateEmbed,
+        components: Vec<CreateActionRow>,
+    ) -> serenity::Result<Message> {
+        self.evict(&http, &key).await;
+        let message = key
+            .channel_id
+            .send_message(
+                &http,
+                CreateMessage::new().embed(embed).components(components),
+            )
+            .await?;
+        self.remember(key, message.id);
+        Ok(message)
+    }
+
     pub async fn publish(
         &self,
         http: impl CacheHttp,
@@ -99,5 +131,7 @@ mod tests {
             registry.messages.lock().unwrap().get(&key).copied(),
             Some(serenity::all::MessageId::new(42))
         );
+        assert_eq!(registry.take(&key), Some(serenity::all::MessageId::new(42)));
+        assert!(registry.take(&key).is_none());
     }
 }
