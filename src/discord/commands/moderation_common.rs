@@ -12,9 +12,9 @@ use serenity::all::{
 pub async fn require_role_manager(
     interaction: &CommandInteraction,
     bot: &DiscordBot,
-    guild_id: i64,
+    discord_guild_id: i64,
 ) -> AppResult<()> {
-    permission::require_role_manager(interaction, bot, guild_id).await
+    permission::require_role_manager(interaction, bot, discord_guild_id).await
 }
 
 pub async fn run_infraction(

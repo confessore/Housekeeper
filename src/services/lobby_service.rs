@@ -60,11 +60,11 @@ pub fn validate_join(
 
 pub async fn create(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     creator: &str,
     requested_ttl: Option<i64>,
 ) -> AppResult<Lobby> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let expires_at = Utc::now() + Duration::hours(ttl_hours(requested_ttl));
     LobbyRepository::new(pool)
         .create(guild_id, creator, expires_at)
@@ -79,6 +79,15 @@ pub(crate) async fn resolve(pool: &PgPool, guild_id: i64, number: i32) -> AppRes
         .ok_or_else(|| {
             AppError::InvalidInput(format!("lobby {number} was not found or has expired"))
         })
+}
+
+pub(crate) async fn resolve_for_guild(
+    pool: &PgPool,
+    discord_guild_id: i64,
+    number: i32,
+) -> AppResult<Lobby> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
+    resolve(pool, guild_id, number).await
 }
 
 pub(crate) fn panel_matches(lobby: Option<&Lobby>, expected_id: i64) -> bool {
@@ -100,12 +109,12 @@ pub(crate) async fn resolve_panel(
 
 pub async fn join(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     number: i32,
     user: &User,
     rank_service: &RankLookupService,
 ) -> AppResult<()> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let repo = LobbyRepository::new(pool);
     let lobby = resolve(pool, guild_id, number).await?;
     if let Some(current) = repo
@@ -153,13 +162,13 @@ pub async fn join(
 
 pub async fn add(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     number: i32,
     target: &User,
     actor: &str,
     rank_service: &RankLookupService,
 ) -> AppResult<()> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let repo = LobbyRepository::new(pool);
     let lobby = resolve(pool, guild_id, number).await?;
     if let Some(current) = repo
@@ -205,8 +214,8 @@ pub async fn add(
     Ok(())
 }
 
-pub async fn leave(pool: &PgPool, guild_id: i64, discord_id: &str) -> AppResult<()> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+pub async fn leave(pool: &PgPool, discord_guild_id: i64, discord_id: &str) -> AppResult<()> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let repo = LobbyRepository::new(pool);
     let lobby = repo
         .find_current_for_member(guild_id, discord_id)
@@ -218,11 +227,11 @@ pub async fn leave(pool: &PgPool, guild_id: i64, discord_id: &str) -> AppResult<
 
 pub async fn leave_lobby(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     number: i32,
     discord_id: &str,
 ) -> AppResult<()> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let lobby = resolve(pool, guild_id, number).await?;
     if !LobbyRepository::new(pool)
         .remove(lobby.id, discord_id)
@@ -235,8 +244,13 @@ pub async fn leave_lobby(
     Ok(())
 }
 
-pub async fn remove(pool: &PgPool, guild_id: i64, number: i32, discord_id: &str) -> AppResult<()> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+pub async fn remove(
+    pool: &PgPool,
+    discord_guild_id: i64,
+    number: i32,
+    discord_id: &str,
+) -> AppResult<()> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let lobby = resolve(pool, guild_id, number).await?;
     if !LobbyRepository::new(pool)
         .remove(lobby.id, discord_id)
@@ -251,10 +265,10 @@ pub async fn remove(pool: &PgPool, guild_id: i64, number: i32, discord_id: &str)
 
 pub async fn remove_from_current(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     discord_id: &str,
 ) -> AppResult<Lobby> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let repo = LobbyRepository::new(pool);
     let lobby = repo
         .find_current_for_member(guild_id, discord_id)
@@ -264,16 +278,16 @@ pub async fn remove_from_current(
     Ok(lobby)
 }
 
-pub async fn close(pool: &PgPool, guild_id: i64, number: i32) -> AppResult<()> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+pub async fn close(pool: &PgPool, discord_guild_id: i64, number: i32) -> AppResult<()> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     if !LobbyRepository::new(pool).close(guild_id, number).await? {
         return Err(AppError::InvalidInput("that lobby is not open".into()));
     }
     Ok(())
 }
 
-pub async fn active(pool: &PgPool, guild_id: i64) -> AppResult<Vec<(Lobby, i64)>> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+pub async fn active(pool: &PgPool, discord_guild_id: i64) -> AppResult<Vec<(Lobby, i64)>> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let repo = LobbyRepository::new(pool);
     repo.cleanup_expired(guild_id).await?;
     let mut result = Vec::new();
@@ -285,11 +299,11 @@ pub async fn active(pool: &PgPool, guild_id: i64) -> AppResult<Vec<(Lobby, i64)>
 
 pub async fn list(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     number: Option<i32>,
     requester: &str,
 ) -> AppResult<(Lobby, Vec<PlayerView>)> {
-    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let repo = LobbyRepository::new(pool);
     let lobby = match number {
         Some(number) => resolve(pool, guild_id, number).await?,

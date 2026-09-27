@@ -19,8 +19,8 @@ pub fn require_developer(interaction: &CommandInteraction, bot: &DiscordBot) -> 
     }
 }
 
-pub async fn require_moderator(pool: &PgPool, guild_id: i64, actor: &str) -> AppResult<()> {
-    if role_resolver::resolve(pool, guild_id, actor)
+pub async fn require_moderator(pool: &PgPool, discord_guild_id: i64, actor: &str) -> AppResult<()> {
+    if role_resolver::resolve(pool, discord_guild_id, actor)
         .await?
         .is_some_and(|tier| tier.is_moderator)
     {
@@ -33,12 +33,12 @@ pub async fn require_moderator(pool: &PgPool, guild_id: i64, actor: &str) -> App
 pub async fn require_role_manager(
     interaction: &CommandInteraction,
     bot: &DiscordBot,
-    guild_id: i64,
+    discord_guild_id: i64,
 ) -> AppResult<()> {
     require_role_manager_for(
         &bot.pool,
         bot,
-        guild_id,
+        discord_guild_id,
         &interaction.user,
         interaction.member.as_deref(),
     )
@@ -48,7 +48,7 @@ pub async fn require_role_manager(
 pub async fn require_role_manager_for(
     pool: &PgPool,
     bot: &DiscordBot,
-    guild_id: i64,
+    discord_guild_id: i64,
     user: &User,
     member: Option<&Member>,
 ) -> AppResult<()> {
@@ -62,7 +62,7 @@ pub async fn require_role_manager_for(
             .permissions
             .is_some_and(|permissions| permissions.contains(Permissions::ADMINISTRATOR))
     });
-    let is_moderator = role_resolver::resolve(pool, guild_id, &user.id.to_string())
+    let is_moderator = role_resolver::resolve(pool, discord_guild_id, &user.id.to_string())
         .await?
         .is_some_and(|tier| tier.is_moderator);
     if is_developer || is_administrator || is_moderator {

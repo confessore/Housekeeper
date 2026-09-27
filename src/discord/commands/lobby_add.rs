@@ -62,6 +62,6 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         &bot.rank_service,
     )
     .await?;
-    let lobby = lobby_service::resolve(&bot.pool, guild.get() as i64, number).await?;
+    let lobby = lobby_service::resolve_for_guild(&bot.pool, guild.get() as i64, number).await?;
     crate::discord::components::send_lobby_panel(ctx, c, bot, lobby.number, lobby.id, false).await
 }

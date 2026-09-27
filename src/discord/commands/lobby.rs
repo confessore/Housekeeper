@@ -143,7 +143,9 @@ async fn run_with_balance(
             _ => None,
         });
     let lobby = match number {
-        Some(number) => lobby_service::resolve(&bot.pool, guild.get() as i64, number).await?,
+        Some(number) => {
+            lobby_service::resolve_for_guild(&bot.pool, guild.get() as i64, number).await?
+        }
         None => {
             lobby_service::list(&bot.pool, guild.get() as i64, None, &c.user.id.to_string())
                 .await?

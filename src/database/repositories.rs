@@ -209,8 +209,12 @@ impl RoleRepository {
             .await?;
         Ok(())
     }
-    pub async fn resolve(&self, guild_id: i64, user_id: &str) -> AppResult<Option<RoleTier>> {
-        let row=sqlx::query_as::<_,(i64,i64,String,bool)>("SELECT rt.id,rt.guild_id,rt.name,rt.is_moderator FROM member_roles_cache mc JOIN role_mappings rm ON rm.discord_role_id=mc.discord_role_id JOIN role_tiers rt ON rt.id=rm.role_tier_id JOIN guilds g ON g.id=rm.guild_id AND g.discord_guild_id=$1 JOIN discord_roles_cache rc ON rc.discord_role_id=mc.discord_role_id WHERE mc.user_discord_id=$2 ORDER BY rc.position DESC LIMIT 1").bind(guild_id).bind(user_id).fetch_optional(&self.pool).await?;
+    pub async fn resolve(
+        &self,
+        discord_guild_id: i64,
+        user_id: &str,
+    ) -> AppResult<Option<RoleTier>> {
+        let row=sqlx::query_as::<_,(i64,i64,String,bool)>("SELECT rt.id,rt.guild_id,rt.name,rt.is_moderator FROM member_roles_cache mc JOIN role_mappings rm ON rm.discord_role_id=mc.discord_role_id JOIN role_tiers rt ON rt.id=rm.role_tier_id JOIN guilds g ON g.id=rm.guild_id AND g.discord_guild_id=$1 JOIN discord_roles_cache rc ON rc.discord_role_id=mc.discord_role_id WHERE mc.user_discord_id=$2 ORDER BY rc.position DESC LIMIT 1").bind(discord_guild_id).bind(user_id).fetch_optional(&self.pool).await?;
         Ok(row.map(|r| RoleTier {
             id: r.0,
             guild_id: r.1,
@@ -253,16 +257,16 @@ impl InfractionRepository {
     pub async fn add(
         &self,
         target: &str,
-        guild_id: i64,
+        discord_guild_id: i64,
         kind: InfractionKind,
         reason: &str,
         actor: &str,
     ) -> AppResult<()> {
-        sqlx::query("INSERT INTO infractions(target_discord_id,guild_id,kind,reason,issued_by_discord_id) VALUES($1,$2,$3,$4,$5)").bind(target).bind(guild_id).bind(kind.as_str()).bind(reason).bind(actor).execute(&self.pool).await?;
+        sqlx::query("INSERT INTO infractions(target_discord_id,guild_id,kind,reason,issued_by_discord_id) VALUES($1,$2,$3,$4,$5)").bind(target).bind(discord_guild_id).bind(kind.as_str()).bind(reason).bind(actor).execute(&self.pool).await?;
         Ok(())
     }
-    pub async fn history(&self, target: &str, guild_id: i64) -> AppResult<Vec<Infraction>> {
-        let rows=sqlx::query_as::<_,(i64,String,String,String,String,chrono::DateTime<chrono::Utc>)>("SELECT id,target_discord_id,kind,reason,issued_by_discord_id,created_at FROM infractions WHERE target_discord_id=$1 AND guild_id=$2 ORDER BY created_at DESC LIMIT 50").bind(target).bind(guild_id).fetch_all(&self.pool).await?;
+    pub async fn history(&self, target: &str, discord_guild_id: i64) -> AppResult<Vec<Infraction>> {
+        let rows=sqlx::query_as::<_,(i64,String,String,String,String,chrono::DateTime<chrono::Utc>)>("SELECT id,target_discord_id,kind,reason,issued_by_discord_id,created_at FROM infractions WHERE target_discord_id=$1 AND guild_id=$2 ORDER BY created_at DESC LIMIT 50").bind(target).bind(discord_guild_id).fetch_all(&self.pool).await?;
         Ok(rows
             .into_iter()
             .map(|r| Infraction {
