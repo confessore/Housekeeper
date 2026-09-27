@@ -81,6 +81,22 @@ pub(crate) async fn resolve(pool: &PgPool, guild_id: i64, number: i32) -> AppRes
         })
 }
 
+pub(crate) fn panel_matches(lobby: Option<&Lobby>, expected_id: i64) -> bool {
+    lobby.is_some_and(|lobby| lobby.id == expected_id)
+}
+
+pub(crate) async fn resolve_panel(
+    pool: &PgPool,
+    guild_id: i64,
+    number: i32,
+    expected_id: i64,
+) -> AppResult<Option<Lobby>> {
+    let lobby = LobbyRepository::new(pool)
+        .find_by_number(guild_id, number)
+        .await?;
+    Ok(lobby.filter(|lobby| panel_matches(Some(lobby), expected_id)))
+}
+
 pub async fn join(
     pool: &PgPool,
     guild_id: i64,
@@ -124,6 +140,9 @@ pub async fn join(
         )
         .await?
     {
+        if resolve(pool, guild_id, number).await.is_err() {
+            return Err(AppError::InvalidInput("the lobby has ended".into()));
+        }
         return Err(AppError::InvalidInput(
             "the lobby filled up or you are already in it".into(),
         ));
@@ -175,6 +194,9 @@ pub async fn add(
         )
         .await?
     {
+        if resolve(pool, guild_id, number).await.is_err() {
+            return Err(AppError::InvalidInput("the lobby has ended".into()));
+        }
         return Err(AppError::InvalidInput(
             "the lobby filled up or that player is already in it".into(),
         ));
@@ -190,6 +212,25 @@ pub async fn leave(pool: &PgPool, guild_id: i64, discord_id: &str) -> AppResult<
         .await?
         .ok_or_else(|| AppError::InvalidInput("you are not in a lobby".into()))?;
     repo.remove(lobby.id, discord_id).await?;
+    Ok(())
+}
+
+pub async fn leave_lobby(
+    pool: &PgPool,
+    guild_id: i64,
+    number: i32,
+    discord_id: &str,
+) -> AppResult<()> {
+    let guild_id = resolve_guild_id(pool, guild_id).await?;
+    let lobby = resolve(pool, guild_id, number).await?;
+    if !LobbyRepository::new(pool)
+        .remove(lobby.id, discord_id)
+        .await?
+    {
+        return Err(AppError::InvalidInput(format!(
+            "you are not in lobby #{number}"
+        )));
+    }
     Ok(())
 }
 
@@ -282,5 +323,17 @@ mod tests {
         assert_eq!(ttl_hours(None), DEFAULT_TTL_HOURS);
         assert_eq!(ttl_hours(Some(0)), 1);
         assert_eq!(ttl_hours(Some(100)), MAX_TTL_HOURS);
+    }
+
+    #[test]
+    fn rejects_stale_panel_ids() {
+        let lobby = Lobby {
+            id: 7,
+            number: 1,
+            expires_at: Utc::now(),
+        };
+        assert!(panel_matches(Some(&lobby), 7));
+        assert!(!panel_matches(Some(&lobby), 8));
+        assert!(!panel_matches(None, 7));
     }
 }

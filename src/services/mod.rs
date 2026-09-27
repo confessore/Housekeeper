@@ -6,5 +6,6 @@ pub mod lobby_service;
 pub mod moderation;
 pub mod rank_emoji_service;
 pub mod rank_lookup_service;
+pub mod register_service;
 pub mod role_resolver;
 pub mod whoishere_service;

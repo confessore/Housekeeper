@@ -80,6 +80,9 @@ async fn run_with_balance(
             CommandDataOptionValue::Integer(value) => i32::try_from(value).ok(),
             _ => None,
         });
+    if let Some(number) = number {
+        return crate::discord::components::send_lobby_panel(ctx, c, bot, number, balance).await;
+    }
     let (lobby, players) = lobby_service::list(
         &bot.pool,
         guild.get() as i64,

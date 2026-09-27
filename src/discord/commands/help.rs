@@ -9,7 +9,7 @@ use serenity::all::{
 
 const HELP_TEXT: &str = "**Housekeeper commands**
 
-Use `/help command:<command>` for detailed usage, options, and permissions for one command.
+Use `/housekeeper` for buttons and panels, or `/help command:<command>` for detailed usage, options, and permissions for one command.
 
 `/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record.
 `/register <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.

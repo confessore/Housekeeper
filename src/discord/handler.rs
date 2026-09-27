@@ -1,8 +1,25 @@
-use crate::discord::{bot::DiscordBot, commands};
+use crate::{
+    discord::{bot::DiscordBot, commands, components},
+    utils::error::AppError,
+};
 use serenity::{
     all::{Context, EditInteractionResponse, EventHandler, Guild, Interaction, Member, Ready},
     async_trait,
 };
+fn user_error(error: &AppError) -> String {
+    match error {
+        AppError::InvalidInput(message) => message.clone(),
+        AppError::Forbidden => "You are not allowed to perform that action.".into(),
+        AppError::Config(_)
+        | AppError::Database(_)
+        | AppError::Discord(_)
+        | AppError::External(_) => {
+            tracing::error!(?error, "interaction failed");
+            "Something went wrong. Please try again.".into()
+        }
+    }
+}
+
 pub struct Handler {
     pub bot: DiscordBot,
 }
@@ -27,9 +44,40 @@ impl EventHandler for Handler {
         }
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::Component(component) = &interaction {
+            if let Err(error) = components::handle_component(&ctx, component, &self.bot).await {
+                let _ = component
+                    .create_response(
+                        &ctx.http,
+                        serenity::all::CreateInteractionResponse::Message(
+                            serenity::all::CreateInteractionResponseMessage::new()
+                                .content(user_error(&error))
+                                .ephemeral(true),
+                        ),
+                    )
+                    .await;
+            }
+            return;
+        }
+        if let Interaction::Modal(modal) = &interaction {
+            if let Err(error) = components::handle_modal(&ctx, modal, &self.bot).await {
+                let _ = modal
+                    .create_response(
+                        &ctx.http,
+                        serenity::all::CreateInteractionResponse::Message(
+                            serenity::all::CreateInteractionResponseMessage::new()
+                                .content(user_error(&error))
+                                .ephemeral(true),
+                        ),
+                    )
+                    .await;
+            }
+            return;
+        }
         if let Interaction::Command(command) = interaction {
             let result = match command.data.name.as_str() {
                 "help" => commands::help::run(&ctx, &command, &self.bot).await,
+                "housekeeper" => commands::housekeeper::run(&ctx, &command, &self.bot).await,
                 "whoishere" => commands::whoishere::run(&ctx, &command, &self.bot).await,
                 "register" => commands::register::run(&ctx, &command, &self.bot).await,
                 "lobby" => commands::lobby::run(&ctx, &command, &self.bot).await,
@@ -57,7 +105,7 @@ impl EventHandler for Handler {
                     command
                         .edit_response(
                             &ctx.http,
-                            EditInteractionResponse::new().content(format!("Error: {e}")),
+                            EditInteractionResponse::new().content(user_error(&e)),
                         )
                         .await
                         .map(|_| ())
@@ -67,7 +115,7 @@ impl EventHandler for Handler {
                             &ctx.http,
                             serenity::all::CreateInteractionResponse::Message(
                                 serenity::all::CreateInteractionResponseMessage::new()
-                                    .content(format!("Error: {e}"))
+                                    .content(user_error(&e))
                                     .ephemeral(true),
                             ),
                         )

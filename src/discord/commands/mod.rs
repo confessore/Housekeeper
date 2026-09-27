@@ -3,6 +3,7 @@ pub mod admin_role_tier;
 pub mod ban;
 pub mod help;
 pub mod history;
+pub mod housekeeper;
 pub mod lobby;
 pub mod lobby_add;
 pub mod lobby_balance;
@@ -24,6 +25,7 @@ use serenity::all::CreateCommand;
 pub fn all() -> Vec<CreateCommand> {
     vec![
         help::register(),
+        housekeeper::register(),
         whoishere::register(),
         register::register(),
         lobby::register(),

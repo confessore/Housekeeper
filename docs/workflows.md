@@ -23,6 +23,19 @@ flowchart TD
 
 Global command registration means command changes are shared by all guilds, although Discord may take time to propagate them. Set `DISCORD_COMMAND_GUILD_ID` during development to register an additional immediate guild-scoped copy without removing the global commands. Database rows that represent guild configuration are always resolved using the current Discord guild ID.
 
+## Interactive panels
+
+`/housekeeper` opens a button-based hub. Lobby panels use buttons for joining, leaving, balancing, refreshing, and moderator management; select menus choose players and a modal collects Steam friend codes. Each lobby control carries both the lobby number and database ID. Before acting, the bot verifies that the lobby is still active and that the ID still matches, so expired, closed, deleted, or reused-number panels become an ended-lobby message instead of affecting a different lobby.
+
+```mermaid
+flowchart TD
+    A[Button or modal interaction] --> B{Lobby still active and ID matches?}
+    B -->|No| C[Replace panel with Lobby ended + Open list]
+    B -->|Yes| D[Run existing lobby service]
+    D --> E[Update panel or private response]
+    D -->|Expected failure| F[Show actionable ephemeral error]
+```
+
 ## Command dispatch
 
 Every slash command enters the same Discord interaction handler. The handler selects the command adapter by its name; the adapter validates command input and delegates domain work to repositories or services. Errors are returned as ephemeral Discord responses.

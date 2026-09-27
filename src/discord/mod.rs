@@ -1,3 +1,4 @@
 pub mod bot;
 pub mod commands;
+pub mod components;
 pub mod handler;

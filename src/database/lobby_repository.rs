@@ -144,7 +144,8 @@ impl<'a> LobbyRepository<'a> {
         let result = sqlx::query(
             "INSERT INTO lobby_members(lobby_id,discord_id,added_by_discord_id,rank_tier,wins,losses)
              SELECT $1,$2,$3,$4,$5,$6
-             WHERE (SELECT COUNT(*) FROM lobby_members WHERE lobby_id=$1) < 10
+             WHERE EXISTS (SELECT 1 FROM lobbies WHERE id=$1 AND expires_at > NOW())
+               AND (SELECT COUNT(*) FROM lobby_members WHERE lobby_id=$1) < 10
              ON CONFLICT (lobby_id,discord_id) DO NOTHING",
         )
         .bind(lobby_id)
