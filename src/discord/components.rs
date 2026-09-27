@@ -1,7 +1,7 @@
 use crate::{
     database::UserRepository,
-    discord::bot::DiscordBot,
-    services::{balance_service, lobby_service, register_service},
+    discord::{bot::DiscordBot, commands},
+    services::{lobby_service, register_service},
     utils::error::{AppError, AppResult},
 };
 use serenity::all::{
@@ -32,31 +32,44 @@ fn parse_panel_id(value: &str) -> Option<(i32, i64, &str)> {
 }
 
 fn lobby_buttons(number: i32, id: i64, balanced: bool) -> Vec<CreateActionRow> {
-    vec![CreateActionRow::Buttons(vec![
-        CreateButton::new(panel_id(number, id, "join"))
-            .label("Join")
-            .style(ButtonStyle::Success),
-        CreateButton::new(panel_id(number, id, "leave"))
-            .label("Leave")
-            .style(ButtonStyle::Secondary),
-        CreateButton::new(panel_id(
-            number,
-            id,
-            if balanced { "plain" } else { "balance" },
-        ))
-        .label(if balanced {
-            "Hide teams"
-        } else {
-            "Balance teams"
-        })
-        .style(ButtonStyle::Primary),
-        CreateButton::new(panel_id(number, id, "refresh"))
-            .label("Refresh")
-            .style(ButtonStyle::Secondary),
-        CreateButton::new(panel_id(number, id, "manage"))
-            .label("Manage")
-            .style(ButtonStyle::Danger),
-    ])]
+    vec![
+        CreateActionRow::Buttons(vec![
+            CreateButton::new(panel_id(number, id, "join"))
+                .label("Join")
+                .style(ButtonStyle::Success),
+            CreateButton::new(panel_id(number, id, "leave"))
+                .label("Leave")
+                .style(ButtonStyle::Secondary),
+            CreateButton::new(panel_id(
+                number,
+                id,
+                if balanced { "plain" } else { "balance" },
+            ))
+            .label(if balanced {
+                "Hide teams"
+            } else {
+                "Balance teams"
+            })
+            .style(ButtonStyle::Primary),
+            CreateButton::new(panel_id(number, id, "refresh"))
+                .label("Refresh")
+                .style(ButtonStyle::Secondary),
+            CreateButton::new(panel_id(number, id, "manage"))
+                .label("Manage")
+                .style(ButtonStyle::Danger),
+        ]),
+        CreateActionRow::Buttons(vec![
+            CreateButton::new("hk:home")
+                .label("Home")
+                .style(ButtonStyle::Secondary),
+            CreateButton::new("hk:list")
+                .label("Lobbies")
+                .style(ButtonStyle::Secondary),
+            CreateButton::new("hk:whoishere")
+                .label("Who is here")
+                .style(ButtonStyle::Secondary),
+        ]),
+    ]
 }
 
 async fn panel(
@@ -67,50 +80,15 @@ async fn panel(
     id: i64,
     balanced: bool,
 ) -> AppResult<(CreateEmbed, Vec<CreateActionRow>)> {
-    let (lobby, players) =
-        lobby_service::list(&bot.pool, guild_id as i64, Some(number), "").await?;
-    let mut embed =
-        CreateEmbed::new().title(format!("Lobby #{} ({}/10)", lobby.number, players.len()));
-    let roster = if players.is_empty() {
-        "No players yet.".to_string()
-    } else {
-        players
-            .iter()
-            .enumerate()
-            .map(|(index, player)| format!("{}. <@{}>", index + 1, player.discord_id))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    embed = embed.description(format!(
-        "Expires in {} minutes\n\n{}",
-        lobby.minutes_remaining(),
-        roster
-    ));
-    if balanced {
-        let teams = balance_service::split(&players);
-        embed = embed
-            .field(
-                "Radiant",
-                teams
-                    .first
-                    .iter()
-                    .map(|p| format!("<@{}>", p.discord_id))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                true,
-            )
-            .field(
-                "Dire",
-                teams
-                    .second
-                    .iter()
-                    .map(|p| format!("<@{}>", p.discord_id))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                true,
-            );
-    }
-    let _ = ctx;
+    let embed = commands::lobby::build_embed(
+        ctx,
+        bot,
+        serenity::all::GuildId::new(guild_id),
+        Some(number),
+        "",
+        balanced,
+    )
+    .await?;
     Ok((embed, lobby_buttons(number, id, balanced)))
 }
 
@@ -130,54 +108,38 @@ fn hub_message() -> CreateInteractionResponseMessage {
         .embed(
             CreateEmbed::new()
                 .title("Housekeeper")
-                .description("Use the buttons below to manage your lobbies without commands."),
+                .description("Use the buttons below to access the same voice and lobby workflows available through slash commands."),
         )
-        .components(vec![CreateActionRow::Buttons(vec![
-            CreateButton::new("hk:list")
-                .label("Lobbies")
-                .style(ButtonStyle::Primary),
-            CreateButton::new("hk:create")
-                .label("Create lobby")
-                .style(ButtonStyle::Success),
-            CreateButton::new("hk:steam")
-                .label("Link Steam")
-                .style(ButtonStyle::Secondary),
-            CreateButton::new("hk:help")
-                .label("Help")
-                .style(ButtonStyle::Secondary),
-        ])])
+        .components(vec![
+            CreateActionRow::Buttons(vec![
+                CreateButton::new("hk:whoishere")
+                    .label("Who is here")
+                    .style(ButtonStyle::Primary),
+                CreateButton::new("hk:list")
+                    .label("Lobbies")
+                    .style(ButtonStyle::Primary),
+                CreateButton::new("hk:current")
+                    .label("My lobby")
+                    .style(ButtonStyle::Secondary),
+                CreateButton::new("hk:create")
+                    .label("Create lobby")
+                    .style(ButtonStyle::Success),
+            ]),
+            CreateActionRow::Buttons(vec![
+                CreateButton::new("hk:steam")
+                    .label("Link Steam")
+                    .style(ButtonStyle::Secondary),
+                CreateButton::new("hk:help")
+                    .label("Help")
+                    .style(ButtonStyle::Secondary),
+            ]),
+        ])
 }
 
 pub async fn send_hub(ctx: &Context, c: &CommandInteraction) -> AppResult<()> {
     c.create_response(ctx, CreateInteractionResponse::Message(hub_message()))
         .await
         .map_err(|error| AppError::Discord(error.to_string()))?;
-    Ok(())
-}
-
-pub async fn send_lobby_panel(
-    ctx: &Context,
-    c: &CommandInteraction,
-    bot: &DiscordBot,
-    number: i32,
-    balanced: bool,
-) -> AppResult<()> {
-    let guild = c
-        .guild_id
-        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
-    let lobby = lobby_service::resolve(&bot.pool, guild.get() as i64, number).await?;
-    let (embed, components) =
-        panel(ctx, bot, guild.get(), lobby.number, lobby.id, balanced).await?;
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .embed(embed)
-                .components(components),
-        ),
-    )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
     Ok(())
 }
 
@@ -207,11 +169,20 @@ pub async fn send_lobby_list(
                 .style(ButtonStyle::Primary),
         );
     }
-    rows.push(
+    rows.extend([
         CreateButton::new("hk:create")
             .label("Create lobby")
             .style(ButtonStyle::Success),
-    );
+        CreateButton::new("hk:home")
+            .label("Home")
+            .style(ButtonStyle::Secondary),
+    ]);
+    let mut action_rows = Vec::new();
+    while !rows.is_empty() && action_rows.len() < 5 {
+        action_rows.push(CreateActionRow::Buttons(
+            rows.drain(..rows.len().min(5)).collect(),
+        ));
+    }
     c.create_response(
         ctx,
         CreateInteractionResponse::Message(
@@ -221,9 +192,7 @@ pub async fn send_lobby_list(
                 } else {
                     "Select a lobby to open its control panel."
                 }))
-                .components(vec![CreateActionRow::Buttons(
-                    rows.into_iter().take(5).collect(),
-                )]),
+                .components(action_rows),
         ),
     )
     .await
@@ -295,14 +264,93 @@ async fn update_panel(
     Ok(())
 }
 
+async fn send_whoishere(
+    ctx: &Context,
+    c: &ComponentInteraction,
+    bot: &DiscordBot,
+    balanced: bool,
+) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let embed =
+        commands::whoishere::build_embed(ctx, guild, &c.user.id.to_string(), bot, balanced).await?;
+    let toggle = if balanced {
+        CreateButton::new("hk:whoishere")
+            .label("Show roster")
+            .style(ButtonStyle::Secondary)
+    } else {
+        CreateButton::new("hk:whoishere:balance")
+            .label("Balance teams")
+            .style(ButtonStyle::Primary)
+    };
+    c.create_response(
+        ctx,
+        CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(vec![
+                    CreateActionRow::Buttons(vec![
+                        toggle,
+                        CreateButton::new("hk:list")
+                            .label("Lobbies")
+                            .style(ButtonStyle::Secondary),
+                    ]),
+                    CreateActionRow::Buttons(vec![CreateButton::new("hk:home")
+                        .label("Home")
+                        .style(ButtonStyle::Secondary)]),
+                ]),
+        ),
+    )
+    .await
+    .map_err(|e| AppError::Discord(e.to_string()))?;
+    Ok(())
+}
+
+async fn send_current_lobby(
+    ctx: &Context,
+    c: &ComponentInteraction,
+    bot: &DiscordBot,
+) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let (lobby, _) =
+        lobby_service::list(&bot.pool, guild.get() as i64, None, &c.user.id.to_string()).await?;
+    let (embed, components) = panel(ctx, bot, guild.get(), lobby.number, lobby.id, false).await?;
+    c.create_response(
+        ctx,
+        CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(components),
+        ),
+    )
+    .await
+    .map_err(|e| AppError::Discord(e.to_string()))?;
+    Ok(())
+}
+
 pub async fn handle_component(
     ctx: &Context,
     c: &ComponentInteraction,
     bot: &DiscordBot,
 ) -> AppResult<()> {
     match c.data.custom_id.as_str() {
+        "hk:home" => {
+            return c
+                .create_response(
+                    ctx,
+                    CreateInteractionResponse::UpdateMessage(hub_message()),
+                )
+                .await
+                .map_err(|e| AppError::Discord(e.to_string()));
+        }
         "hk:list" => return send_list(ctx, c, bot).await,
         "hk:create" => return create_lobby(ctx, c, bot).await,
+        "hk:whoishere" => return send_whoishere(ctx, c, bot, false).await,
+        "hk:whoishere:balance" => return send_whoishere(ctx, c, bot, true).await,
+        "hk:current" => return send_current_lobby(ctx, c, bot).await,
         "hk:steam" => return show_steam_modal(c, ctx).await,
         "hk:help" => return ephemeral(c, ctx, "Use Lobbies to open a lobby, Create lobby to start one, and the lobby panel buttons to join, leave, balance, or manage players.").await,
         _ => {}
@@ -483,11 +531,20 @@ async fn send_list(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot) ->
                 .style(ButtonStyle::Primary),
         );
     }
-    buttons.push(
+    buttons.extend([
         CreateButton::new("hk:create")
             .label("Create lobby")
             .style(ButtonStyle::Success),
-    );
+        CreateButton::new("hk:home")
+            .label("Home")
+            .style(ButtonStyle::Secondary),
+    ]);
+    let mut rows = Vec::new();
+    while !buttons.is_empty() && rows.len() < 5 {
+        rows.push(CreateActionRow::Buttons(
+            buttons.drain(..buttons.len().min(5)).collect(),
+        ));
+    }
     c.create_response(
         ctx,
         CreateInteractionResponse::UpdateMessage(
@@ -497,9 +554,7 @@ async fn send_list(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot) ->
                 } else {
                     "Select a lobby to open its control panel."
                 }))
-                .components(vec![CreateActionRow::Buttons(
-                    buttons.into_iter().take(5).collect(),
-                )]),
+                .components(rows),
         ),
     )
     .await

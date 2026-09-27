@@ -87,10 +87,11 @@ pub(crate) fn panel_matches(lobby: Option<&Lobby>, expected_id: i64) -> bool {
 
 pub(crate) async fn resolve_panel(
     pool: &PgPool,
-    guild_id: i64,
+    discord_guild_id: i64,
     number: i32,
     expected_id: i64,
 ) -> AppResult<Option<Lobby>> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
     let lobby = LobbyRepository::new(pool)
         .find_by_number(guild_id, number)
         .await?;

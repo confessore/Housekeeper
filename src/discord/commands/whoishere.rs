@@ -7,7 +7,9 @@ use crate::{
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
     CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
+    GuildId,
 };
+
 pub fn register() -> CreateCommand {
     CreateCommand::new("whoishere")
         .description("Show the players in your voice channel")
@@ -20,9 +22,10 @@ pub fn register() -> CreateCommand {
             .required(false),
         )
 }
+
 async fn load_voice_members(
     ctx: &Context,
-    guild: serenity::all::GuildId,
+    guild: GuildId,
 ) -> AppResult<Vec<whoishere_service::VoiceMember>> {
     if let Some(data) = ctx.cache.guild(guild) {
         return Ok(data
@@ -70,22 +73,15 @@ async fn load_voice_members(
     Ok(voice_members)
 }
 
-pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
-    let guild = c
-        .guild_id
-        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
-    let balance = c
-        .data
-        .options
-        .iter()
-        .find(|o| o.name == "balance")
-        .and_then(|o| match o.value {
-            CommandDataOptionValue::Boolean(v) => Some(v),
-            _ => None,
-        })
-        .unwrap_or(false);
+pub async fn build_embed(
+    ctx: &Context,
+    guild: GuildId,
+    requester: &str,
+    bot: &DiscordBot,
+    balance: bool,
+) -> AppResult<CreateEmbed> {
     let voice_members = load_voice_members(ctx, guild).await?;
-    let members = whoishere_service::members_in_channel(&c.user.id.to_string(), &voice_members);
+    let members = whoishere_service::members_in_channel(requester, &voice_members);
     if members.is_empty() {
         return Err(AppError::InvalidInput("join a voice channel first".into()));
     }
@@ -143,24 +139,48 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
                 format!("{}…", team.chars().take(1_023).collect::<String>())
             }
         };
-        let radiant = truncate_team(
-            teams
-                .first
-                .iter()
-                .map(|player| format!("<@{}>", player.discord_id))
-                .collect(),
-        );
-        let dire = truncate_team(
-            teams
-                .second
-                .iter()
-                .map(|player| format!("<@{}>", player.discord_id))
-                .collect(),
-        );
         embed = embed
-            .field("Radiant", radiant, false)
-            .field("Dire", dire, false);
+            .field(
+                "Radiant",
+                truncate_team(
+                    teams
+                        .first
+                        .iter()
+                        .map(|player| format!("<@{}>", player.discord_id))
+                        .collect(),
+                ),
+                false,
+            )
+            .field(
+                "Dire",
+                truncate_team(
+                    teams
+                        .second
+                        .iter()
+                        .map(|player| format!("<@{}>", player.discord_id))
+                        .collect(),
+                ),
+                false,
+            );
     }
+    Ok(embed)
+}
+
+pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let balance = c
+        .data
+        .options
+        .iter()
+        .find(|o| o.name == "balance")
+        .and_then(|o| match o.value {
+            CommandDataOptionValue::Boolean(v) => Some(v),
+            _ => None,
+        })
+        .unwrap_or(false);
+    let embed = build_embed(ctx, guild, &c.user.id.to_string(), bot, balance).await?;
     c.create_response(
         ctx,
         CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().embed(embed)),

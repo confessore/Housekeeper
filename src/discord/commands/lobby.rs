@@ -6,6 +6,7 @@ use crate::{
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
     CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
+    GuildId,
 };
 
 pub fn register() -> CreateCommand {
@@ -30,7 +31,7 @@ fn player_label(player: &crate::services::whoishere_service::PlayerView) -> Stri
 
 fn server_display_name(
     ctx: &Context,
-    guild: serenity::all::GuildId,
+    guild: GuildId,
     player: &crate::services::whoishere_service::PlayerView,
 ) -> String {
     let Some(id) = player.discord_id.parse::<u64>().ok() else {
@@ -50,46 +51,16 @@ fn server_display_name(
         .unwrap_or_else(|| player.display_name.clone())
 }
 
-pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
-    run_with_balance(ctx, c, bot, false).await
-}
-
-pub(crate) async fn run_balanced(
+pub(crate) async fn build_embed(
     ctx: &Context,
-    c: &CommandInteraction,
     bot: &DiscordBot,
-) -> AppResult<()> {
-    run_with_balance(ctx, c, bot, true).await
-}
-
-async fn run_with_balance(
-    ctx: &Context,
-    c: &CommandInteraction,
-    bot: &DiscordBot,
+    guild: GuildId,
+    number: Option<i32>,
+    requester: &str,
     balance: bool,
-) -> AppResult<()> {
-    let guild = c
-        .guild_id
-        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
-    let number = c
-        .data
-        .options
-        .iter()
-        .find(|option| option.name == "number")
-        .and_then(|option| match option.value {
-            CommandDataOptionValue::Integer(value) => i32::try_from(value).ok(),
-            _ => None,
-        });
-    if let Some(number) = number {
-        return crate::discord::components::send_lobby_panel(ctx, c, bot, number, balance).await;
-    }
-    let (lobby, players) = lobby_service::list(
-        &bot.pool,
-        guild.get() as i64,
-        number,
-        &c.user.id.to_string(),
-    )
-    .await?;
+) -> AppResult<CreateEmbed> {
+    let (lobby, players) =
+        lobby_service::list(&bot.pool, guild.get() as i64, number, requester).await?;
     let mut embed = CreateEmbed::new().title(format!(
         "Lobby #{} ({} / 10 players)",
         lobby.number,
@@ -139,6 +110,40 @@ async fn run_with_balance(
             .field("Radiant", radiant, false)
             .field("Dire", dire, false);
     }
+    Ok(embed)
+}
+
+pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
+    run_with_balance(ctx, c, bot, false).await
+}
+
+pub(crate) async fn run_balanced(
+    ctx: &Context,
+    c: &CommandInteraction,
+    bot: &DiscordBot,
+) -> AppResult<()> {
+    run_with_balance(ctx, c, bot, true).await
+}
+
+async fn run_with_balance(
+    ctx: &Context,
+    c: &CommandInteraction,
+    bot: &DiscordBot,
+    balance: bool,
+) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let number = c
+        .data
+        .options
+        .iter()
+        .find(|option| option.name == "number")
+        .and_then(|option| match option.value {
+            CommandDataOptionValue::Integer(value) => i32::try_from(value).ok(),
+            _ => None,
+        });
+    let embed = build_embed(ctx, bot, guild, number, &c.user.id.to_string(), balance).await?;
     c.create_response(
         ctx,
         CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().embed(embed)),

@@ -25,7 +25,7 @@ Global command registration means command changes are shared by all guilds, alth
 
 ## Interactive panels
 
-`/housekeeper` opens a button-based hub. Lobby panels use buttons for joining, leaving, balancing, refreshing, and moderator management; select menus choose players and a modal collects Steam friend codes. Each lobby control carries both the lobby number and database ID. Before acting, the bot verifies that the lobby is still active and that the ID still matches, so expired, closed, deleted, or reused-number panels become an ended-lobby message instead of affecting a different lobby.
+`/housekeeper` opens a button-based hub with parity for the main voice and lobby workflows: `Who is here`, lobby list, current lobby, create lobby, Steam linking, and help. Lobby panels use buttons for joining, leaving, balancing, refreshing, and moderator management; select menus choose players and a modal collects Steam friend codes. Each lobby control carries both the lobby number and database ID. Before acting, the bot verifies that the lobby is still active and that the ID still matches, so expired, closed, deleted, or reused-number panels become an ended-lobby message instead of affecting a different lobby.
 
 ```mermaid
 flowchart TD
