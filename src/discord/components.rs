@@ -31,45 +31,39 @@ fn parse_panel_id(value: &str) -> Option<(i32, i64, &str)> {
         .flatten()
 }
 
+fn parse_whoishere_id(value: &str) -> Option<(&str, &str)> {
+    let mut parts = value.split(':');
+    (parts.next() == Some(PREFIX) && parts.next() == Some("w"))
+        .then(|| Some((parts.next()?, parts.next()?)))
+        .flatten()
+}
+
 pub(crate) fn lobby_buttons(number: i32, id: i64, balanced: bool) -> Vec<CreateActionRow> {
-    vec![
-        CreateActionRow::Buttons(vec![
-            CreateButton::new(panel_id(number, id, "join"))
-                .label("Join")
-                .style(ButtonStyle::Success),
-            CreateButton::new(panel_id(number, id, "leave"))
-                .label("Leave")
-                .style(ButtonStyle::Secondary),
-            CreateButton::new(panel_id(
-                number,
-                id,
-                if balanced { "plain" } else { "balance" },
-            ))
-            .label(if balanced {
-                "Hide teams"
-            } else {
-                "Balance teams"
-            })
-            .style(ButtonStyle::Primary),
-            CreateButton::new(panel_id(number, id, "refresh"))
-                .label("Refresh")
-                .style(ButtonStyle::Secondary),
-            CreateButton::new(panel_id(number, id, "manage"))
-                .label("Manage")
-                .style(ButtonStyle::Danger),
-        ]),
-        CreateActionRow::Buttons(vec![
-            CreateButton::new("hk:home")
-                .label("Home")
-                .style(ButtonStyle::Secondary),
-            CreateButton::new("hk:list")
-                .label("Lobbies")
-                .style(ButtonStyle::Secondary),
-            CreateButton::new("hk:whoishere")
-                .label("Who is here")
-                .style(ButtonStyle::Secondary),
-        ]),
-    ]
+    vec![CreateActionRow::Buttons(vec![
+        CreateButton::new(panel_id(number, id, "join"))
+            .label("Join")
+            .style(ButtonStyle::Success),
+        CreateButton::new(panel_id(number, id, "leave"))
+            .label("Leave")
+            .style(ButtonStyle::Secondary),
+        CreateButton::new(panel_id(
+            number,
+            id,
+            if balanced { "plain" } else { "balance" },
+        ))
+        .label(if balanced {
+            "Hide teams"
+        } else {
+            "Balance teams"
+        })
+        .style(ButtonStyle::Primary),
+        CreateButton::new(panel_id(number, id, "refresh"))
+            .label("Refresh")
+            .style(ButtonStyle::Secondary),
+        CreateButton::new(panel_id(number, id, "manage"))
+            .label("Manage")
+            .style(ButtonStyle::Danger),
+    ])]
 }
 
 async fn panel(
@@ -302,27 +296,25 @@ async fn update_panel(
     Ok(())
 }
 
-pub(crate) fn whoishere_buttons(balanced: bool) -> Vec<CreateActionRow> {
-    let toggle = if balanced {
-        CreateButton::new("hk:whoishere")
-            .label("Show roster")
-            .style(ButtonStyle::Secondary)
-    } else {
-        CreateButton::new("hk:whoishere:balance")
-            .label("Balance teams")
-            .style(ButtonStyle::Primary)
-    };
-    vec![
-        CreateActionRow::Buttons(vec![
-            toggle,
-            CreateButton::new("hk:list")
-                .label("Lobbies")
-                .style(ButtonStyle::Secondary),
-        ]),
-        CreateActionRow::Buttons(vec![CreateButton::new("hk:home")
-            .label("Home")
-            .style(ButtonStyle::Secondary)]),
-    ]
+pub(crate) fn whoishere_buttons(requester: &str, balanced: bool) -> Vec<CreateActionRow> {
+    let toggle_action = if balanced { "plain" } else { "balance" };
+    let toggle = CreateButton::new(format!("hk:w:{requester}:{toggle_action}"))
+        .label(if balanced {
+            "Show roster"
+        } else {
+            "Balance teams"
+        })
+        .style(if balanced {
+            ButtonStyle::Secondary
+        } else {
+            ButtonStyle::Primary
+        });
+    vec![CreateActionRow::Buttons(vec![
+        toggle,
+        CreateButton::new(format!("hk:w:{requester}:refresh"))
+            .label("Refresh")
+            .style(ButtonStyle::Secondary),
+    ])]
 }
 
 async fn send_whoishere(
@@ -346,9 +338,33 @@ async fn send_whoishere(
             channel_id: c.channel_id,
         },
         embed,
-        whoishere_buttons(balanced),
+        whoishere_buttons(&c.user.id.to_string(), balanced),
     )
     .await
+}
+
+async fn update_whoishere(
+    ctx: &Context,
+    c: &ComponentInteraction,
+    bot: &DiscordBot,
+    requester: &str,
+    balanced: bool,
+) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let embed = commands::whoishere::build_embed(ctx, guild, requester, bot, balanced).await?;
+    c.create_response(
+        ctx,
+        CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(whoishere_buttons(requester, balanced)),
+        ),
+    )
+    .await
+    .map_err(|e| AppError::Discord(e.to_string()))?;
+    Ok(())
 }
 
 async fn send_current_lobby(
@@ -395,11 +411,18 @@ pub async fn handle_component(
         "hk:list" => return send_list(ctx, c, bot).await,
         "hk:create" => return create_lobby(ctx, c, bot).await,
         "hk:whoishere" => return send_whoishere(ctx, c, bot, false).await,
-        "hk:whoishere:balance" => return send_whoishere(ctx, c, bot, true).await,
         "hk:current" => return send_current_lobby(ctx, c, bot).await,
         "hk:steam" => return show_steam_modal(c, ctx).await,
         "hk:help" => return ephemeral(c, ctx, "Use Lobbies to open a lobby, Create lobby to start one, and the lobby panel buttons to join, leave, balance, or manage players.").await,
         _ => {}
+    }
+    if let Some((requester, action)) = parse_whoishere_id(&c.data.custom_id) {
+        let balanced = match action {
+            "balance" => true,
+            "plain" | "refresh" => false,
+            _ => return ephemeral(c, ctx, "This control is no longer available.").await,
+        };
+        return update_whoishere(ctx, c, bot, requester, balanced).await;
     }
     if let Some(value) = c.data.custom_id.strip_prefix("hk:open:") {
         let mut parts = value.split(':');
@@ -753,4 +776,22 @@ pub async fn handle_modal(ctx: &Context, c: &ModalInteraction, bot: &DiscordBot)
     .await
     .map_err(|e| AppError::Discord(e.to_string()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_whoishere_id;
+
+    #[test]
+    fn parses_whoishere_controls_without_matching_lobby_controls() {
+        assert_eq!(
+            parse_whoishere_id("hk:w:123456789:balance"),
+            Some(("123456789", "balance"))
+        );
+        assert_eq!(parse_whoishere_id("hk:l:7:42:refresh"), None);
+        assert_eq!(
+            parse_whoishere_id("hk:w:123456789:unknown"),
+            Some(("123456789", "unknown"))
+        );
+    }
 }

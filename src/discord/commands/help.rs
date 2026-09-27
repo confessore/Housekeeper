@@ -12,7 +12,7 @@ const HELP_TEXT: &str = "**Housekeeper commands**
 Use `/housekeeper` for a private navigation hub, or `/help command:<command>` for detailed usage, options, permissions, and available buttons.
 
 `/housekeeper` — Open private navigation for voice lookup, lobby list/current/create, Steam linking, and help. Shared lobby and voice panels are reused in the channel when possible.
-`/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record. The response includes buttons to balance teams or navigate back.
+`/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record. The response includes Balance teams and Refresh buttons.
 `/register <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.
 `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — Manage numbered lobbies. Numbers are assigned automatically and reused when available; lobbies expire within 24 hours.
 `/lobby-join <number>`, `/lobby-leave` — Join or leave a numbered lobby. Each player can be in one lobby per server.
@@ -32,7 +32,7 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "whoishere",
-        "**/whoishere**\nList non-bot players in your current voice channel. The response is shared in the channel for your user and includes navigation buttons.\n\n**Options**\n• `balance` (optional) — Split the players into two balanced teams. You can also use the `Balance teams` button.\n\nThis is a voice-channel scan, not a lobby roster.",
+        "**/whoishere**\nList non-bot players in your current voice channel. The response is shared in the channel for your user and includes Balance teams and Refresh buttons.\n\n**Options**\n• `balance` (optional) — Split the players into two balanced teams. You can also use the `Balance teams` button.\n\nThis is a voice-channel scan, not a lobby roster.",
     ),
     (
         "register",

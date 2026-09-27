@@ -186,7 +186,10 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         CreateInteractionResponse::Message(
             CreateInteractionResponseMessage::new()
                 .embed(embed)
-                .components(crate::discord::components::whoishere_buttons(balance)),
+                .components(crate::discord::components::whoishere_buttons(
+                    &c.user.id.to_string(),
+                    balance,
+                )),
         ),
     )
     .await
