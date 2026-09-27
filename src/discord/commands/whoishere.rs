@@ -20,26 +20,12 @@ pub fn register() -> CreateCommand {
             .required(false),
         )
 }
-pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
-    let guild = c
-        .guild_id
-        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
-    let balance = c
-        .data
-        .options
-        .iter()
-        .find(|o| o.name == "balance")
-        .and_then(|o| match o.value {
-            CommandDataOptionValue::Boolean(v) => Some(v),
-            _ => None,
-        })
-        .unwrap_or(false);
-    let members = {
-        let data = ctx
-            .cache
-            .guild(guild)
-            .ok_or_else(|| AppError::Discord("guild cache unavailable".into()))?;
-        let voice_members = data
+async fn load_voice_members(
+    ctx: &Context,
+    guild: serenity::all::GuildId,
+) -> AppResult<Vec<whoishere_service::VoiceMember>> {
+    if let Some(data) = ctx.cache.guild(guild) {
+        return Ok(data
             .members
             .values()
             .map(|member| whoishere_service::VoiceMember {
@@ -55,13 +41,54 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
                     .and_then(|state| state.channel_id)
                     .map(|channel| channel.get()),
             })
-            .collect::<Vec<_>>();
-        let members = whoishere_service::members_in_channel(&c.user.id.to_string(), &voice_members);
-        if members.is_empty() {
-            return Err(AppError::InvalidInput("join a voice channel first".into()));
-        }
-        members
-    };
+            .collect());
+    }
+
+    tracing::warn!(
+        guild_id = guild.get(),
+        "guild cache unavailable; resolving voice members through Discord HTTP"
+    );
+    let members = guild
+        .members(&ctx.http, Some(1_000), None)
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
+    let mut voice_members = Vec::with_capacity(members.len());
+    for member in members {
+        let channel_id = guild
+            .get_user_voice_state(&ctx.http, member.user.id)
+            .await
+            .ok()
+            .and_then(|state| state.channel_id)
+            .map(|channel| channel.get());
+        voice_members.push(whoishere_service::VoiceMember {
+            discord_id: member.user.id.to_string(),
+            username: member.nick.unwrap_or_else(|| member.user.name.clone()),
+            bot: member.user.bot,
+            channel_id,
+        });
+    }
+    Ok(voice_members)
+}
+
+pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> AppResult<()> {
+    let guild = c
+        .guild_id
+        .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+    let balance = c
+        .data
+        .options
+        .iter()
+        .find(|o| o.name == "balance")
+        .and_then(|o| match o.value {
+            CommandDataOptionValue::Boolean(v) => Some(v),
+            _ => None,
+        })
+        .unwrap_or(false);
+    let voice_members = load_voice_members(ctx, guild).await?;
+    let members = whoishere_service::members_in_channel(&c.user.id.to_string(), &voice_members);
+    if members.is_empty() {
+        return Err(AppError::InvalidInput("join a voice channel first".into()));
+    }
     let repo = UserRepository::new(bot.pool.clone());
     let mut players = Vec::new();
     for (discord_id, name) in members {
