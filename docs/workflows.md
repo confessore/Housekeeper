@@ -65,7 +65,7 @@ sequenceDiagram
     participant Bot as Housekeeper
     participant DB as PostgreSQL
 
-    Admin->>Discord: /admin-role-tier create <name> <moderator>
+    Admin->>Discord: /admin-role-tier create NAME MODERATOR
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify Administrator or moderator tier
     Bot->>DB: Ensure guild exists
@@ -73,7 +73,7 @@ sequenceDiagram
     DB-->>Bot: Tier created
     Bot-->>Discord: Ephemeral confirmation
 
-    Admin->>Discord: /admin-role-map set <discord_role> <tier>
+    Admin->>Discord: /admin-role-map set DISCORD_ROLE TIER
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify role-manager permission
     Bot->>DB: Find tier in current guild
@@ -81,17 +81,17 @@ sequenceDiagram
     DB-->>Bot: Mapping saved
     Bot-->>Discord: Ephemeral confirmation
 
-    Admin->>Discord: /admin-role-map remove <discord_role>
+    Admin->>Discord: /admin-role-map remove DISCORD_ROLE
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify role-manager permission
     Bot->>DB: Delete role-to-tier mapping
     DB-->>Bot: Mapping removed
     Bot-->>Discord: Ephemeral confirmation
 
-    Admin->>Discord: /admin-role-tier remove <name> confirm:true
+    Admin->>Discord: /admin-role-tier remove NAME confirm:true
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify role-manager permission and mapping count
-    Bot->>DB: Delete tier; cascade-delete its mappings
+    Bot->>DB: Delete tier, then cascade-delete its mappings
     DB-->>Bot: Tier and mappings removed
     Bot-->>Discord: Ephemeral confirmation
 ```
@@ -127,14 +127,14 @@ sequenceDiagram
     participant Bot as Housekeeper
     participant DB as PostgreSQL
 
-    Moderator->>Discord: /warn, /ban, or /unban <user> <reason>
+    Moderator->>Discord: /warn, /ban, or /unban USER REASON
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify moderator permission
     Bot->>DB: Record guild-scoped infraction
     DB-->>Bot: Infraction saved
     Bot-->>Discord: Ephemeral confirmation
 
-    Moderator->>Discord: /history <user>
+    Moderator->>Discord: /history USER
     Discord->>Bot: Command interaction
     Bot->>Bot: Verify guild context
     Bot->>DB: Read target history for current guild
