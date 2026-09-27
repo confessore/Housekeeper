@@ -36,14 +36,7 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
     let lobby = lobby_service::resolve_for_guild(&bot.pool, guild.get() as i64, number).await?;
     lobby_service::close(&bot.pool, guild.get() as i64, number).await?;
     bot.panel_registry
-        .evict(
-            &ctx.http,
-            &PanelKey {
-                scope: "lobby".into(),
-                key: lobby.id.to_string(),
-                channel_id: c.channel_id,
-            },
-        )
+        .evict(&ctx.http, &PanelKey::lobby(lobby.number, c.channel_id))
         .await;
     let (embed, components) = crate::discord::components::ended(number);
     c.create_response(

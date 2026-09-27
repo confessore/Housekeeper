@@ -1,13 +1,13 @@
 # Housekeeper
 
-Housekeeper is a modular Rust Discord bot for inhouse communities. One bot instance can serve every Discord guild it has been invited to; configuration and role mappings are isolated per guild.
+Housekeeper is a modular Rust Discord bot for DotA2 inhouse communities. One bot instance can serve every Discord guild it has been invited to; configuration and role mappings are isolated per guild.
 
 ## Current commands
 
-- `/housekeeper` — Open a private button-based hub for `/whoishere`, lobby list/current/create actions, Steam linking, and help. Shared lobby and voice panels are posted once per channel/view and reused when possible; slash commands remain available as an alternative.
+- `/housekeeper` — Open a private button-based hub for `/whoishere`, lobby list/current/create actions, Steam linking, and help. The lobby list is private; shared lobby and voice panels are reused per channel/view when possible. Slash commands remain available as an alternative.
 - `/help` — explain how to use every Housekeeper command, including required permissions and guild scope.
 - `/whoishere [balance]` — list non-bot players in your current voice channel, ordered by rank. Each linked player includes OpenDota, Dotabuff, and Stratz profile links. This is an ad-hoc voice scan, not the official lobby.
-- `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — create, inspect, or close numbered 10-player lobbies. Numbers are assigned automatically, reuse the smallest available number, and lobbies expire within 24 hours.
+- `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — create, inspect, or close numbered 10-player lobbies. The lobby list is private, while each lobby number has one shared panel per channel. Numbers are assigned automatically, reuse the smallest available number, and lobbies expire within 24 hours.
 - `/lobby-join <number>`, `/lobby-leave` — join or leave a numbered lobby. A player can be in only one lobby per server, and a linked Steam account is required. Rank and win/loss data are refreshed when joining, with cached data used if OpenDota is unavailable.
 - `/lobby-add <number> <user>`, `/lobby-remove <user>` — moderator-only lobby membership management; removal resolves the target's current lobby automatically because a player can only be in one active lobby per server. Adding a player also refreshes their OpenDota rank and win/loss data.
 - `/lobby-seed <number> [count]` — developer-only test helper that adds up to 10 synthetic players with varied ranks for balance testing; requires `DEVELOPER_DISCORD_IDS`.

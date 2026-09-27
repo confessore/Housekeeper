@@ -28,7 +28,7 @@ Guild Administrators or members in a moderator tier can configure the guild. Mod
 const COMMAND_HELP: &[(&str, &str)] = &[
     (
         "housekeeper",
-        "**/housekeeper**\nOpen a private button hub.\n\n**Navigation**\n• `Who is here` — Show your current voice channel roster.\n• `Lobbies` — Open the shared active-lobby list.\n• `My lobby` — Open your current lobby.\n• `Create lobby` — Create and publish a shared lobby panel.\n• `Link Steam` — Open the Steam registration form.\n\nThe hub is private to you. Shared lobby and voice panels are reused in the channel when possible.\n\nSlash commands remain available for every workflow.",
+        "**/housekeeper**\nOpen a private button hub.\n\n**Navigation**\n• `Who is here` — Show your current voice channel roster.\n• `Lobbies` — Open your private active-lobby list.\n• `My lobby` — Open your current lobby.\n• `Create lobby` — Create and publish a shared lobby panel.\n• `Link Steam` — Open the Steam registration form.\n\nThe hub is private to you. Shared lobby and voice panels are reused in the channel when possible.\n\nSlash commands remain available for every workflow.",
     ),
     (
         "whoishere",
@@ -44,7 +44,7 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "lobby-list",
-        "**/lobby-list**\nList every active numbered lobby in this server, including its player count and remaining lifetime. Use `Open #N` to open a shared lobby panel or `Create lobby` to start one. Repeated views are reused in the same channel when possible.",
+        "**/lobby-list**\nList every active numbered lobby in this server, including its player count and remaining lifetime. Only you can see the list. Use `Open #N` to open the shared lobby panel for that lobby or `Create lobby` to start one.",
     ),
     (
         "lobby-close",

@@ -48,6 +48,8 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         false,
     )
     .await?;
+    let key = crate::discord::panel_registry::PanelKey::lobby(lobby.number, c.channel_id);
+    bot.panel_registry.evict(&ctx.http, &key).await;
     let message = c
         .edit_response(
             ctx,
@@ -57,13 +59,6 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         )
         .await
         .map_err(|error| AppError::Discord(error.to_string()))?;
-    bot.panel_registry.remember(
-        crate::discord::panel_registry::PanelKey {
-            scope: "lobby".into(),
-            key: lobby.id.to_string(),
-            channel_id: c.channel_id,
-        },
-        message.id,
-    );
+    bot.panel_registry.remember(key, message.id).await;
     Ok(())
 }

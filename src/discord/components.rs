@@ -97,42 +97,34 @@ pub(crate) async fn send_lobby_panel(
     let guild = c
         .guild_id
         .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
-    let key = PanelKey {
-        scope: "lobby".into(),
-        key: id.to_string(),
-        channel_id: c.channel_id,
-    };
-    let embed = commands::lobby::build_embed(
-        ctx,
-        bot,
-        guild,
-        Some(number),
-        &c.user.id.to_string(),
-        balanced,
-    )
-    .await?;
-    bot.panel_registry.evict(&ctx.http, &key).await;
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .embed(embed)
-                .components(lobby_buttons(number, id, balanced)),
-        ),
-    )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
-    if let Ok(message) = c.get_response(&ctx.http).await {
-        bot.panel_registry.remember(
-            PanelKey {
-                scope: "lobby".into(),
-                key: id.to_string(),
-                channel_id: c.channel_id,
-            },
-            message.id,
-        );
-    }
-    Ok(())
+    let key = PanelKey::lobby(number, c.channel_id);
+    bot.panel_registry
+        .replace(&ctx.http, key, || async {
+            let embed = commands::lobby::build_embed(
+                ctx,
+                bot,
+                guild,
+                Some(number),
+                &c.user.id.to_string(),
+                balanced,
+            )
+            .await?;
+            c.create_response(
+                ctx,
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .embed(embed)
+                        .components(lobby_buttons(number, id, balanced)),
+                ),
+            )
+            .await
+            .map_err(|error| AppError::Discord(error.to_string()))?;
+            c.get_response(&ctx.http)
+                .await
+                .map(|message| message.id)
+                .map_err(|error| AppError::Discord(error.to_string()))
+        })
+        .await
 }
 
 pub(crate) fn ended(number: i32) -> (CreateEmbed, Vec<CreateActionRow>) {
@@ -270,26 +262,13 @@ pub async fn send_lobby_list(
         ctx,
         CreateInteractionResponse::Message(
             CreateInteractionResponseMessage::new()
-                .embed(embed.description(if lobbies.is_empty() {
-                    "No active lobbies."
-                } else {
-                    "Select a lobby to open its control panel."
-                }))
-                .components(action_rows),
+                .embed(embed)
+                .components(action_rows)
+                .ephemeral(true),
         ),
     )
     .await
     .map_err(|error| AppError::Discord(error.to_string()))?;
-    if let Ok(message) = c.get_response(&ctx.http).await {
-        bot.panel_registry.remember(
-            PanelKey {
-                scope: "lobby-list".into(),
-                key: "active".into(),
-                channel_id: c.channel_id,
-            },
-            message.id,
-        );
-    }
     Ok(())
 }
 
@@ -330,9 +309,8 @@ async fn publish_component(
     .await
     .map_err(|e| AppError::Discord(e.to_string()))?;
     bot.panel_registry
-        .publish(&ctx.http, key, embed, components)
-        .await
-        .map_err(|e| AppError::Discord(e.to_string()))?;
+        .publish(&ctx.http, key, || async { Ok((embed, components)) })
+        .await?;
     Ok(())
 }
 
@@ -350,25 +328,26 @@ async fn update_panel(
     let guild = c
         .guild_id
         .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
-    let key = PanelKey {
-        scope: "lobby".into(),
-        key: id.to_string(),
-        channel_id: c.channel_id,
-    };
+    let key = PanelKey::lobby(number, c.channel_id);
     let Some(_) = lobby_service::resolve_panel(&bot.pool, guild.get() as i64, number, id).await?
     else {
-        let (embed, components) = ended(number);
-        bot.panel_registry
-            .bump(&ctx.http, key, embed, components)
-            .await
-            .map_err(|e| AppError::Discord(e.to_string()))?;
-        return Ok(());
-    };
-    let (embed, components) = panel(ctx, bot, guild.get(), number, id, balanced).await?;
-    bot.panel_registry
-        .bump(&ctx.http, key, embed, components)
+        c.create_response(
+            ctx,
+            CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::new()
+                    .embed(ended(number).0)
+                    .components(ended(number).1),
+            ),
+        )
         .await
         .map_err(|e| AppError::Discord(e.to_string()))?;
+        return Ok(());
+    };
+    bot.panel_registry
+        .bump(&ctx.http, key, || {
+            panel(ctx, bot, guild.get(), number, id, balanced)
+        })
+        .await?;
     Ok(())
 }
 
@@ -458,11 +437,7 @@ async fn send_current_lobby(
         ctx,
         c,
         bot,
-        PanelKey {
-            scope: "lobby".into(),
-            key: lobby.id.to_string(),
-            channel_id: c.channel_id,
-        },
+        PanelKey::lobby(lobby.number, c.channel_id),
         embed,
         components,
     )
@@ -535,11 +510,7 @@ pub async fn handle_component(
             ctx,
             c,
             bot,
-            PanelKey {
-                scope: "lobby".into(),
-                key: id.to_string(),
-                channel_id: c.channel_id,
-            },
+            PanelKey::lobby(number, c.channel_id),
             embed,
             components,
         )
@@ -561,19 +532,16 @@ pub async fn handle_component(
             .await
             .map_err(|e| AppError::Discord(e.to_string()))?;
         let (embed, components) = ended(number);
-        bot.panel_registry
-            .bump(
-                &ctx.http,
-                PanelKey {
-                    scope: "lobby".into(),
-                    key: id.to_string(),
-                    channel_id: c.channel_id,
-                },
-                embed,
-                components,
-            )
-            .await
-            .map_err(|e| AppError::Discord(e.to_string()))?;
+        c.create_response(
+            ctx,
+            CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::new()
+                    .embed(embed)
+                    .components(components),
+            ),
+        )
+        .await
+        .map_err(|e| AppError::Discord(e.to_string()))?;
         return Ok(());
     }
     match action {
@@ -633,20 +601,11 @@ pub async fn handle_component(
                 &bot.rank_service,
             )
             .await?;
-            let (embed, components) = panel(ctx, bot, guild as u64, number, id, false).await?;
             bot.panel_registry
-                .bump(
-                    &ctx.http,
-                    PanelKey {
-                        scope: "lobby".into(),
-                        key: id.to_string(),
-                        channel_id: c.channel_id,
-                    },
-                    embed,
-                    components,
-                )
-                .await
-                .map_err(|e| AppError::Discord(e.to_string()))?;
+                .bump(&ctx.http, PanelKey::lobby(number, c.channel_id), || {
+                    panel(ctx, bot, guild as u64, number, id, false)
+                })
+                .await?;
             ephemeral(c, ctx, "Player added to the lobby.").await
         }
         "remove" => {
@@ -658,39 +617,21 @@ pub async fn handle_component(
                 .first()
                 .ok_or_else(|| AppError::InvalidInput("choose a player to remove".into()))?;
             lobby_service::remove(&bot.pool, guild, number, target).await?;
-            let (embed, components) = panel(ctx, bot, guild as u64, number, id, false).await?;
             bot.panel_registry
-                .bump(
-                    &ctx.http,
-                    PanelKey {
-                        scope: "lobby".into(),
-                        key: id.to_string(),
-                        channel_id: c.channel_id,
-                    },
-                    embed,
-                    components,
-                )
-                .await
-                .map_err(|e| AppError::Discord(e.to_string()))?;
+                .bump(&ctx.http, PanelKey::lobby(number, c.channel_id), || {
+                    panel(ctx, bot, guild as u64, number, id, false)
+                })
+                .await?;
             ephemeral(c, ctx, "Player removed from the lobby.").await
         }
         "close" => {
             lobby_service::close(&bot.pool, guild, number).await?;
-            let (embed, components) = ended(number);
             ephemeral(c, ctx, format!("Lobby #{number} closed.")).await?;
             bot.panel_registry
-                .bump(
-                    &ctx.http,
-                    PanelKey {
-                        scope: "lobby".into(),
-                        key: id.to_string(),
-                        channel_id: c.channel_id,
-                    },
-                    embed,
-                    components,
-                )
-                .await
-                .map_err(|e| AppError::Discord(e.to_string()))?;
+                .bump(&ctx.http, PanelKey::lobby(number, c.channel_id), || async {
+                    Ok(ended(number))
+                })
+                .await?;
             Ok(())
         }
         _ => ephemeral(c, ctx, "This control is no longer available.").await,
@@ -703,23 +644,17 @@ async fn send_list(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot) ->
         .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
     let lobbies = lobby_service::active(&bot.pool, guild.get() as i64).await?;
     let (embed, rows) = lobby_list_view(&lobbies);
-    publish_component(
+    c.create_response(
         ctx,
-        c,
-        bot,
-        PanelKey {
-            scope: "lobby-list".into(),
-            key: "active".into(),
-            channel_id: c.channel_id,
-        },
-        embed.description(if lobbies.is_empty() {
-            "No active lobbies."
-        } else {
-            "Select a lobby to open its control panel."
-        }),
-        rows,
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(rows)
+                .ephemeral(true),
+        ),
     )
     .await
+    .map_err(|e| AppError::Discord(e.to_string()))
 }
 
 async fn create_lobby(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot) -> AppResult<()> {
@@ -733,11 +668,7 @@ async fn create_lobby(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot)
         ctx,
         c,
         bot,
-        PanelKey {
-            scope: "lobby".into(),
-            key: lobby.id.to_string(),
-            channel_id: c.channel_id,
-        },
+        PanelKey::lobby(lobby.number, c.channel_id),
         embed,
         components,
     )
