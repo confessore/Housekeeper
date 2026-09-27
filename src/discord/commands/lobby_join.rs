@@ -1,6 +1,6 @@
 use crate::{
     database::UserRepository,
-    discord::bot::DiscordBot,
+    discord::{bot::DiscordBot, member_name},
     services::lobby_service,
     utils::error::{AppError, AppResult},
 };
@@ -32,8 +32,9 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
             _ => None,
         })
         .ok_or_else(|| AppError::InvalidInput("lobby number is required".into()))?;
+    let display_name = member_name::interaction_name(&c.user, c.member.as_deref());
     let user = UserRepository::new(bot.pool.clone())
-        .find_or_create(&c.user.id.to_string(), &c.user.name)
+        .find_or_create(&c.user.id.to_string(), &display_name)
         .await?;
     lobby_service::join(
         &bot.pool,

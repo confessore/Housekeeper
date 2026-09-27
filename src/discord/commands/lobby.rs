@@ -1,5 +1,5 @@
 use crate::{
-    discord::bot::DiscordBot,
+    discord::{bot::DiscordBot, member_name},
     services::{balance_service, dota_profile_links, lobby_seed_service, lobby_service},
     utils::error::{AppError, AppResult},
 };
@@ -26,28 +26,6 @@ fn player_label(player: &crate::services::whoishere_service::PlayerView) -> Stri
     } else {
         format!("<@{}>", player.discord_id)
     }
-}
-
-fn server_display_name(
-    ctx: &Context,
-    guild: GuildId,
-    player: &crate::services::whoishere_service::PlayerView,
-) -> String {
-    let Some(id) = player.discord_id.parse::<u64>().ok() else {
-        return player.display_name.clone();
-    };
-    let Some(data) = ctx.cache.guild(guild) else {
-        return player.display_name.clone();
-    };
-    data.members
-        .get(&serenity::all::UserId::new(id))
-        .map(|member| {
-            member
-                .nick
-                .clone()
-                .unwrap_or_else(|| member.user.name.clone())
-        })
-        .unwrap_or_else(|| player.display_name.clone())
 }
 
 pub(crate) async fn build_embed(
@@ -79,7 +57,13 @@ pub(crate) async fn build_embed(
             format!(
                 "{} {}",
                 bot.rank_emojis.label(player.rank),
-                server_display_name(ctx, guild, player)
+                member_name::guild_display_name(
+                    ctx,
+                    guild,
+                    &player.discord_id,
+                    &player.display_name
+                )
+                .await
             ),
             format!(
                 "{}\n{}-{} ({} games)\n{links}",

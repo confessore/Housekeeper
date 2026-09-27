@@ -33,10 +33,7 @@ async fn load_voice_members(
             .values()
             .map(|member| whoishere_service::VoiceMember {
                 discord_id: member.user.id.to_string(),
-                username: member
-                    .nick
-                    .clone()
-                    .unwrap_or_else(|| member.user.name.clone()),
+                username: member.display_name().to_owned(),
                 bot: member.user.bot,
                 channel_id: data
                     .voice_states
@@ -65,7 +62,7 @@ async fn load_voice_members(
             .map(|channel| channel.get());
         voice_members.push(whoishere_service::VoiceMember {
             discord_id: member.user.id.to_string(),
-            username: member.nick.unwrap_or_else(|| member.user.name.clone()),
+            username: member.display_name().to_owned(),
             bot: member.user.bot,
             channel_id,
         });

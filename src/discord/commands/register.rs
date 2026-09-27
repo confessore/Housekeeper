@@ -26,11 +26,12 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         .find(|o| o.name == "friend_code")
         .and_then(|o| o.value.as_str())
         .ok_or_else(|| AppError::InvalidInput("friend_code is required".into()))?;
+    let display_name = crate::discord::member_name::interaction_name(&c.user, c.member.as_deref());
     crate::services::register_service::link(
         &bot.pool,
         &bot.rank_service,
         &c.user.id.to_string(),
-        &c.user.name,
+        &display_name,
         input,
     )
     .await?;

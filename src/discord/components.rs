@@ -1,6 +1,6 @@
 use crate::{
     database::UserRepository,
-    discord::{bot::DiscordBot, commands, panel_registry::PanelKey},
+    discord::{bot::DiscordBot, commands, member_name, panel_registry::PanelKey},
     services::{lobby_service, register_service},
     utils::error::{AppError, AppResult},
 };
@@ -578,8 +578,9 @@ pub async fn handle_component(
     }
     match action {
         "join" => {
+            let display_name = member_name::interaction_name(&c.user, c.member.as_ref());
             let user = UserRepository::new(bot.pool.clone())
-                .find_or_create(&c.user.id.to_string(), &c.user.name)
+                .find_or_create(&c.user.id.to_string(), &display_name)
                 .await?;
             if user.friend_code.is_none() {
                 c.create_response(
@@ -768,11 +769,13 @@ async fn show_manage(
         &c.user.id.to_string(),
     )
     .await?;
-    let options = players
-        .into_iter()
-        .take(25)
-        .map(|p| CreateSelectMenuOption::new(p.display_name, p.discord_id))
-        .collect();
+    let mut options = Vec::with_capacity(players.len().min(25));
+    for player in players.into_iter().take(25) {
+        let display_name =
+            member_name::guild_display_name(ctx, guild, &player.discord_id, &player.display_name)
+                .await;
+        options.push(CreateSelectMenuOption::new(display_name, player.discord_id));
+    }
     let remove = CreateSelectMenu::new(
         panel_id(number, id, "remove"),
         CreateSelectMenuKind::String { options },
@@ -842,11 +845,12 @@ pub async fn handle_modal(ctx: &Context, c: &ModalInteraction, bot: &DiscordBot)
             _ => None,
         })
         .ok_or_else(|| AppError::InvalidInput("friend code is required".into()))?;
+    let display_name = member_name::interaction_name(&c.user, c.member.as_ref());
     register_service::link(
         &bot.pool,
         &bot.rank_service,
         &c.user.id.to_string(),
-        &c.user.name,
+        &display_name,
         &value,
     )
     .await?;
