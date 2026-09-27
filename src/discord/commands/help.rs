@@ -9,9 +9,10 @@ use serenity::all::{
 
 const HELP_TEXT: &str = "**Housekeeper commands**
 
-Use `/housekeeper` for buttons and panels, or `/help command:<command>` for detailed usage, options, and permissions for one command.
+Use `/housekeeper` for a private navigation hub, or `/help command:<command>` for detailed usage, options, permissions, and available buttons.
 
-`/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record.
+`/housekeeper` — Open private navigation for voice lookup, lobby list/current/create, Steam linking, and help. Shared lobby and voice panels are reused in the channel when possible.
+`/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record. The response includes buttons to balance teams or navigate back.
 `/register <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.
 `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — Manage numbered lobbies. Numbers are assigned automatically and reused when available; lobbies expire within 24 hours.
 `/lobby-join <number>`, `/lobby-leave` — Join or leave a numbered lobby. Each player can be in one lobby per server.
@@ -26,8 +27,12 @@ Guild Administrators or members in a moderator tier can configure the guild. Mod
 
 const COMMAND_HELP: &[(&str, &str)] = &[
     (
+        "housekeeper",
+        "**/housekeeper**\nOpen a private button hub.\n\n**Navigation**\n• `Who is here` — Show your current voice channel roster.\n• `Lobbies` — Open the shared active-lobby list.\n• `My lobby` — Open your current lobby.\n• `Create lobby` — Create and publish a shared lobby panel.\n• `Link Steam` — Open the Steam registration form.\n\nThe hub is private to you. Shared lobby and voice panels are reused in the channel when possible.\n\nSlash commands remain available for every workflow.",
+    ),
+    (
         "whoishere",
-        "**/whoishere**\nList non-bot players in your current voice channel.\n\n**Options**\n• `balance` (optional) — Split the players into two balanced teams.\n\nThis is a voice-channel scan, not a lobby roster.",
+        "**/whoishere**\nList non-bot players in your current voice channel. The response is shared in the channel for your user and includes navigation buttons.\n\n**Options**\n• `balance` (optional) — Split the players into two balanced teams. You can also use the `Balance teams` button.\n\nThis is a voice-channel scan, not a lobby roster.",
     ),
     (
         "register",
@@ -35,11 +40,11 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "lobby-create",
-        "**/lobby-create [hours]**\nCreate a lobby in this server. Housekeeper assigns the smallest available number and reuses numbers after lobbies close or expire.\n\n**Options**\n• `hours` (optional) — Lifetime from 1 to 24 hours; defaults to 12.\n\nEach lobby holds up to 10 players.",
+        "**/lobby-create [hours]**\nCreate a lobby in this server. Housekeeper assigns the smallest available number and reuses numbers after lobbies close or expire. The response includes shared Join, Leave, Balance, Refresh, and Manage buttons.\n\n**Options**\n• `hours` (optional) — Lifetime from 1 to 24 hours; defaults to 12.\n\nEach lobby holds up to 10 players.",
     ),
     (
         "lobby-list",
-        "**/lobby-list**\nList every active numbered lobby in this server, including its player count and remaining lifetime.",
+        "**/lobby-list**\nList every active numbered lobby in this server, including its player count and remaining lifetime. Use `Open #N` to open a shared lobby panel or `Create lobby` to start one. Repeated views are reused in the same channel when possible.",
     ),
     (
         "lobby-close",
@@ -63,11 +68,11 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "lobby",
-        "**/lobby [number]**\nShow a lobby roster. If `number` is omitted, your current lobby is shown.\n\n**Options**\n• `number` (optional) — Numbered lobby to display.",
+        "**/lobby [number]**\nShow a lobby roster. If `number` is omitted, your current lobby is shown. The response includes shared `Join`, `Leave`, `Balance teams`, `Refresh`, `Manage`, and navigation buttons.\n\n**Options**\n• `number` (optional) — Numbered lobby to display.",
     ),
     (
         "lobby-balance",
-        "**/lobby-balance <number>**\nShow a numbered lobby split into balanced Radiant and Dire teams.\n\n**Options**\n• `number` (required) — Numbered lobby to balance.",
+        "**/lobby-balance <number>**\nShow a numbered lobby split into balanced Radiant and Dire teams. The response includes the same shared lobby controls and can toggle the team display.\n\n**Options**\n• `number` (required) — Numbered lobby to balance.",
     ),
     (
         "lobby-seed",

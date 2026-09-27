@@ -183,9 +183,23 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
     let embed = build_embed(ctx, guild, &c.user.id.to_string(), bot, balance).await?;
     c.create_response(
         ctx,
-        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().embed(embed)),
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(crate::discord::components::whoishere_buttons(balance)),
+        ),
     )
     .await
     .map_err(|e| AppError::Discord(e.to_string()))?;
+    if let Ok(message) = c.get_response(&ctx.http).await {
+        bot.panel_registry.remember(
+            crate::discord::panel_registry::PanelKey {
+                scope: "whoishere".into(),
+                key: c.user.id.to_string(),
+                channel_id: c.channel_id,
+            },
+            message.id,
+        );
+    }
     Ok(())
 }

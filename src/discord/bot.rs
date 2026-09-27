@@ -1,4 +1,4 @@
-use super::handler::Handler;
+use super::{handler::Handler, panel_registry::PanelRegistry};
 use crate::{
     config::Settings,
     services::{rank_emoji_service::RankEmojiMap, rank_lookup_service::RankLookupService},
@@ -12,6 +12,7 @@ pub struct DiscordBot {
     pub pool: PgPool,
     pub rank_service: Arc<RankLookupService>,
     pub rank_emojis: Arc<RankEmojiMap>,
+    pub panel_registry: Arc<PanelRegistry>,
 }
 impl DiscordBot {
     pub fn new(
@@ -25,6 +26,7 @@ impl DiscordBot {
             pool,
             rank_service,
             rank_emojis,
+            panel_registry: Arc::new(PanelRegistry::new()),
         }
     }
     pub async fn start(&self) -> anyhow::Result<()> {

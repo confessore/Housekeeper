@@ -1,6 +1,6 @@
 use crate::{
     database::UserRepository,
-    discord::{bot::DiscordBot, commands},
+    discord::{bot::DiscordBot, commands, panel_registry::PanelKey},
     services::{lobby_service, register_service},
     utils::error::{AppError, AppResult},
 };
@@ -31,7 +31,7 @@ fn parse_panel_id(value: &str) -> Option<(i32, i64, &str)> {
         .flatten()
 }
 
-fn lobby_buttons(number: i32, id: i64, balanced: bool) -> Vec<CreateActionRow> {
+pub(crate) fn lobby_buttons(number: i32, id: i64, balanced: bool) -> Vec<CreateActionRow> {
     vec![
         CreateActionRow::Buttons(vec![
             CreateButton::new(panel_id(number, id, "join"))
@@ -137,9 +137,12 @@ fn hub_message() -> CreateInteractionResponseMessage {
 }
 
 pub async fn send_hub(ctx: &Context, c: &CommandInteraction) -> AppResult<()> {
-    c.create_response(ctx, CreateInteractionResponse::Message(hub_message()))
-        .await
-        .map_err(|error| AppError::Discord(error.to_string()))?;
+    c.create_response(
+        ctx,
+        CreateInteractionResponse::Message(hub_message().ephemeral(true)),
+    )
+    .await
+    .map_err(|error| AppError::Discord(error.to_string()))?;
     Ok(())
 }
 
@@ -197,6 +200,16 @@ pub async fn send_lobby_list(
     )
     .await
     .map_err(|error| AppError::Discord(error.to_string()))?;
+    if let Ok(message) = c.get_response(&ctx.http).await {
+        bot.panel_registry.remember(
+            PanelKey {
+                scope: "lobby-list".into(),
+                key: "active".into(),
+                channel_id: c.channel_id,
+            },
+            message.id,
+        );
+    }
     Ok(())
 }
 
@@ -215,6 +228,31 @@ async fn ephemeral(
     )
     .await
     .map_err(|error| AppError::Discord(error.to_string()))?;
+    Ok(())
+}
+
+async fn publish_component(
+    ctx: &Context,
+    c: &ComponentInteraction,
+    bot: &DiscordBot,
+    key: PanelKey,
+    embed: CreateEmbed,
+    components: Vec<CreateActionRow>,
+) -> AppResult<()> {
+    c.create_response(
+        ctx,
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .content("The shared panel is available in the channel.")
+                .ephemeral(true),
+        ),
+    )
+    .await
+    .map_err(|e| AppError::Discord(e.to_string()))?;
+    bot.panel_registry
+        .publish(&ctx.http, key, embed, components)
+        .await
+        .map_err(|e| AppError::Discord(e.to_string()))?;
     Ok(())
 }
 
@@ -264,6 +302,29 @@ async fn update_panel(
     Ok(())
 }
 
+pub(crate) fn whoishere_buttons(balanced: bool) -> Vec<CreateActionRow> {
+    let toggle = if balanced {
+        CreateButton::new("hk:whoishere")
+            .label("Show roster")
+            .style(ButtonStyle::Secondary)
+    } else {
+        CreateButton::new("hk:whoishere:balance")
+            .label("Balance teams")
+            .style(ButtonStyle::Primary)
+    };
+    vec![
+        CreateActionRow::Buttons(vec![
+            toggle,
+            CreateButton::new("hk:list")
+                .label("Lobbies")
+                .style(ButtonStyle::Secondary),
+        ]),
+        CreateActionRow::Buttons(vec![CreateButton::new("hk:home")
+            .label("Home")
+            .style(ButtonStyle::Secondary)]),
+    ]
+}
+
 async fn send_whoishere(
     ctx: &Context,
     c: &ComponentInteraction,
@@ -275,36 +336,19 @@ async fn send_whoishere(
         .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
     let embed =
         commands::whoishere::build_embed(ctx, guild, &c.user.id.to_string(), bot, balanced).await?;
-    let toggle = if balanced {
-        CreateButton::new("hk:whoishere")
-            .label("Show roster")
-            .style(ButtonStyle::Secondary)
-    } else {
-        CreateButton::new("hk:whoishere:balance")
-            .label("Balance teams")
-            .style(ButtonStyle::Primary)
-    };
-    c.create_response(
+    publish_component(
         ctx,
-        CreateInteractionResponse::UpdateMessage(
-            CreateInteractionResponseMessage::new()
-                .embed(embed)
-                .components(vec![
-                    CreateActionRow::Buttons(vec![
-                        toggle,
-                        CreateButton::new("hk:list")
-                            .label("Lobbies")
-                            .style(ButtonStyle::Secondary),
-                    ]),
-                    CreateActionRow::Buttons(vec![CreateButton::new("hk:home")
-                        .label("Home")
-                        .style(ButtonStyle::Secondary)]),
-                ]),
-        ),
+        c,
+        bot,
+        PanelKey {
+            scope: "whoishere".into(),
+            key: c.user.id.to_string(),
+            channel_id: c.channel_id,
+        },
+        embed,
+        whoishere_buttons(balanced),
     )
     .await
-    .map_err(|e| AppError::Discord(e.to_string()))?;
-    Ok(())
 }
 
 async fn send_current_lobby(
@@ -318,17 +362,19 @@ async fn send_current_lobby(
     let (lobby, _) =
         lobby_service::list(&bot.pool, guild.get() as i64, None, &c.user.id.to_string()).await?;
     let (embed, components) = panel(ctx, bot, guild.get(), lobby.number, lobby.id, false).await?;
-    c.create_response(
+    publish_component(
         ctx,
-        CreateInteractionResponse::UpdateMessage(
-            CreateInteractionResponseMessage::new()
-                .embed(embed)
-                .components(components),
-        ),
+        c,
+        bot,
+        PanelKey {
+            scope: "lobby".into(),
+            key: lobby.id.to_string(),
+            channel_id: c.channel_id,
+        },
+        embed,
+        components,
     )
     .await
-    .map_err(|e| AppError::Discord(e.to_string()))?;
-    Ok(())
 }
 
 pub async fn handle_component(
@@ -341,7 +387,7 @@ pub async fn handle_component(
             return c
                 .create_response(
                     ctx,
-                    CreateInteractionResponse::UpdateMessage(hub_message()),
+                    CreateInteractionResponse::Message(hub_message().ephemeral(true)),
                 )
                 .await
                 .map_err(|e| AppError::Discord(e.to_string()));
@@ -385,16 +431,19 @@ pub async fn handle_component(
             return Ok(());
         };
         let (embed, components) = panel(ctx, bot, guild.get(), number, id, false).await?;
-        c.create_response(
+        publish_component(
             ctx,
-            CreateInteractionResponse::UpdateMessage(
-                CreateInteractionResponseMessage::new()
-                    .embed(embed)
-                    .components(components),
-            ),
+            c,
+            bot,
+            PanelKey {
+                scope: "lobby".into(),
+                key: id.to_string(),
+                channel_id: c.channel_id,
+            },
+            embed,
+            components,
         )
-        .await
-        .map_err(|e| AppError::Discord(e.to_string()))?;
+        .await?;
         return Ok(());
     }
     let Some((number, id, action)) = parse_panel_id(&c.data.custom_id) else {
@@ -545,21 +594,23 @@ async fn send_list(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot) ->
             buttons.drain(..buttons.len().min(5)).collect(),
         ));
     }
-    c.create_response(
+    publish_component(
         ctx,
-        CreateInteractionResponse::UpdateMessage(
-            CreateInteractionResponseMessage::new()
-                .embed(embed.description(if lobbies.is_empty() {
-                    "No active lobbies."
-                } else {
-                    "Select a lobby to open its control panel."
-                }))
-                .components(rows),
-        ),
+        c,
+        bot,
+        PanelKey {
+            scope: "lobby-list".into(),
+            key: "active".into(),
+            channel_id: c.channel_id,
+        },
+        embed.description(if lobbies.is_empty() {
+            "No active lobbies."
+        } else {
+            "Select a lobby to open its control panel."
+        }),
+        rows,
     )
     .await
-    .map_err(|e| AppError::Discord(e.to_string()))?;
-    Ok(())
 }
 
 async fn create_lobby(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot) -> AppResult<()> {
@@ -569,17 +620,19 @@ async fn create_lobby(ctx: &Context, c: &ComponentInteraction, bot: &DiscordBot)
     let lobby =
         lobby_service::create(&bot.pool, guild.get() as i64, &c.user.id.to_string(), None).await?;
     let (embed, components) = panel(ctx, bot, guild.get(), lobby.number, lobby.id, false).await?;
-    c.create_response(
+    publish_component(
         ctx,
-        CreateInteractionResponse::UpdateMessage(
-            CreateInteractionResponseMessage::new()
-                .embed(embed)
-                .components(components),
-        ),
+        c,
+        bot,
+        PanelKey {
+            scope: "lobby".into(),
+            key: lobby.id.to_string(),
+            channel_id: c.channel_id,
+        },
+        embed,
+        components,
     )
     .await
-    .map_err(|e| AppError::Discord(e.to_string()))?;
-    Ok(())
 }
 
 async fn show_manage(

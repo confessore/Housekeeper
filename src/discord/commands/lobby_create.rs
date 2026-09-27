@@ -39,15 +39,31 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         });
     let lobby =
         lobby_service::create(&bot.pool, guild.get() as i64, &c.user.id.to_string(), hours).await?;
-    c.edit_response(
+    let embed = crate::discord::commands::lobby::build_embed(
         ctx,
-        EditInteractionResponse::new().content(format!(
-            "Created lobby #{} for up to {} hours.",
-            lobby.number,
-            lobby_service::ttl_hours(hours)
-        )),
+        bot,
+        guild,
+        Some(lobby.number),
+        &c.user.id.to_string(),
+        false,
     )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
+    .await?;
+    let message = c
+        .edit_response(
+            ctx,
+            EditInteractionResponse::new().embed(embed).components(
+                crate::discord::components::lobby_buttons(lobby.number, lobby.id, false),
+            ),
+        )
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
+    bot.panel_registry.remember(
+        crate::discord::panel_registry::PanelKey {
+            scope: "lobby".into(),
+            key: lobby.id.to_string(),
+            channel_id: c.channel_id,
+        },
+        message.id,
+    );
     Ok(())
 }

@@ -4,7 +4,7 @@ Housekeeper is a modular Rust Discord bot for inhouse communities. One bot insta
 
 ## Current commands
 
-- `/housekeeper` — Open the button-based Housekeeper hub for `/whoishere`, lobby list/current/create actions, Steam linking, and help. Slash commands remain available as an alternative.
+- `/housekeeper` — Open a private button-based hub for `/whoishere`, lobby list/current/create actions, Steam linking, and help. Shared lobby and voice panels are posted once per channel/view and reused when possible; slash commands remain available as an alternative.
 - `/help` — explain how to use every Housekeeper command, including required permissions and guild scope.
 - `/whoishere [balance]` — list non-bot players in your current voice channel, ordered by rank. Each linked player includes OpenDota, Dotabuff, and Stratz profile links. This is an ad-hoc voice scan, not the official lobby.
 - `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — create, inspect, or close numbered 10-player lobbies. Numbers are assigned automatically, reuse the smallest available number, and lobbies expire within 24 hours.

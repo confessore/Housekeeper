@@ -143,12 +143,46 @@ async fn run_with_balance(
             CommandDataOptionValue::Integer(value) => i32::try_from(value).ok(),
             _ => None,
         });
-    let embed = build_embed(ctx, bot, guild, number, &c.user.id.to_string(), balance).await?;
+    let lobby = match number {
+        Some(number) => lobby_service::resolve(&bot.pool, guild.get() as i64, number).await?,
+        None => {
+            lobby_service::list(&bot.pool, guild.get() as i64, None, &c.user.id.to_string())
+                .await?
+                .0
+        }
+    };
+    let embed = build_embed(
+        ctx,
+        bot,
+        guild,
+        Some(lobby.number),
+        &c.user.id.to_string(),
+        balance,
+    )
+    .await?;
     c.create_response(
         ctx,
-        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().embed(embed)),
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .embed(embed)
+                .components(crate::discord::components::lobby_buttons(
+                    lobby.number,
+                    lobby.id,
+                    balance,
+                )),
+        ),
     )
     .await
     .map_err(|error| AppError::Discord(error.to_string()))?;
+    if let Ok(message) = c.get_response(&ctx.http).await {
+        bot.panel_registry.remember(
+            crate::discord::panel_registry::PanelKey {
+                scope: "lobby".into(),
+                key: lobby.id.to_string(),
+                channel_id: c.channel_id,
+            },
+            message.id,
+        );
+    }
     Ok(())
 }
