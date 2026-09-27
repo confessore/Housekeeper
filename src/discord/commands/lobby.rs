@@ -1,11 +1,12 @@
 use crate::{
     discord::bot::DiscordBot,
-    services::{balance_service, dota_profile_links, lobby_service},
+    services::{balance_service, dota_profile_links, lobby_seed_service, lobby_service},
     utils::error::{AppError, AppResult},
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
     CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+    InteractionResponseFlags,
 };
 
 pub fn register() -> CreateCommand {
@@ -18,7 +19,10 @@ pub fn register() -> CreateCommand {
 }
 
 fn player_label(player: &crate::services::whoishere_service::PlayerView) -> String {
-    if player.discord_id.starts_with("housekeeper-test-") {
+    if player
+        .discord_id
+        .starts_with(lobby_seed_service::SYNTHETIC_PREFIX)
+    {
         player.display_name.clone()
     } else {
         format!("<@{}>", player.discord_id)
@@ -76,12 +80,16 @@ async fn run_with_balance(
             player.losses,
             player.games
         ));
-        if let Some(account_id) = player.account_id {
-            text.push_str(&format!(
-                "  {}\n",
-                dota_profile_links::markdown_line(account_id)
-            ));
-        }
+        let links = if let Some(account_id) = player.account_id {
+            dota_profile_links::markdown_line(account_id)
+        } else {
+            let dummy_code = lobby_seed_service::dummy_friend_code(&player.discord_id);
+            format!(
+                "{} · `{dummy_code}`",
+                dota_profile_links::markdown_home_line()
+            )
+        };
+        text.push_str(&format!("  {links}\n"));
     }
     if balance {
         let teams = balance_service::split(&players);
@@ -96,7 +104,11 @@ async fn run_with_balance(
     }
     c.create_response(
         ctx,
-        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().content(text)),
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .content(text)
+                .flags(InteractionResponseFlags::SUPPRESS_EMBEDS),
+        ),
     )
     .await
     .map_err(|error| AppError::Discord(error.to_string()))?;

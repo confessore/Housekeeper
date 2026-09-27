@@ -1,9 +1,7 @@
 use crate::{
     database::{LobbyRepository, UserRepository},
     models::{Lobby, User},
-    services::{
-        rank_lookup_service::RankLookupService, role_resolver, whoishere_service::PlayerView,
-    },
+    services::{rank_lookup_service::RankLookupService, whoishere_service::PlayerView},
     utils::error::{AppError, AppResult},
 };
 use chrono::{Duration, Utc};
@@ -234,7 +232,6 @@ pub async fn list(
     number: Option<i32>,
     requester: &str,
 ) -> AppResult<(Lobby, Vec<PlayerView>)> {
-    let discord_guild_id = guild_id;
     let guild_id = resolve_guild_id(pool, guild_id).await?;
     let repo = LobbyRepository::new(pool);
     let lobby = match number {
@@ -248,10 +245,8 @@ pub async fn list(
     let mut players = Vec::new();
     for member in repo.list(lobby.id).await? {
         if let Some(user) = user_repo.find_by_discord(&member.discord_id).await? {
-            let role = role_resolver::resolve(pool, discord_guild_id, &member.discord_id).await?;
             players.push(crate::services::whoishere_service::view_with_stats(
                 user,
-                role,
                 member.rank_tier,
                 Some(member.wins),
                 Some(member.losses),

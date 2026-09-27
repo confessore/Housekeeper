@@ -12,11 +12,15 @@ pub fn stratz_url(account_id: i64) -> String {
 
 pub fn markdown_line(account_id: i64) -> String {
     format!(
-        "[OpenDota]({}) · [Dotabuff]({}) · [Stratz]({})",
+        "[OpenDota]({}) · [Dotabuff]({}) · [Stratz]({}) · `{account_id}`",
         opendota_url(account_id),
         dotabuff_url(account_id),
         stratz_url(account_id)
     )
+}
+
+pub fn markdown_home_line() -> String {
+    "[OpenDota](https://www.opendota.com) · [Dotabuff](https://www.dotabuff.com) · [Stratz](https://stratz.com)".into()
 }
 
 #[cfg(test)]
@@ -27,7 +31,15 @@ mod tests {
     fn builds_profile_links() {
         assert_eq!(
             markdown_line(123),
-            "[OpenDota](https://www.opendota.com/players/123) · [Dotabuff](https://www.dotabuff.com/players/123) · [Stratz](https://stratz.com/players/123)"
+            "[OpenDota](https://www.opendota.com/players/123) · [Dotabuff](https://www.dotabuff.com/players/123) · [Stratz](https://stratz.com/players/123) · `123`"
+        );
+    }
+
+    #[test]
+    fn builds_homepage_links() {
+        assert_eq!(
+            markdown_home_line(),
+            "[OpenDota](https://www.opendota.com) · [Dotabuff](https://www.dotabuff.com) · [Stratz](https://stratz.com)"
         );
     }
 }

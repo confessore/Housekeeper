@@ -6,7 +6,15 @@ use crate::{
 };
 use sqlx::PgPool;
 
-const SYNTHETIC_PREFIX: &str = "housekeeper-test-";
+pub(crate) const SYNTHETIC_PREFIX: &str = "housekeeper-test-";
+
+pub(crate) fn dummy_friend_code(discord_id: &str) -> String {
+    discord_id
+        .strip_prefix(SYNTHETIC_PREFIX)
+        .map(|suffix| format!("{suffix:0>8}"))
+        .unwrap_or_else(|| "00000000".into())
+}
+
 const SYNTHETIC_PROFILES: [(Option<i32>, i32, i32); 10] = [
     (Some(11), 18, 22),
     (Some(21), 1_200, 1_400),
@@ -145,6 +153,13 @@ mod tests {
         assert!(players
             .iter()
             .all(|player| player.wins + player.losses >= 10));
+    }
+
+    #[test]
+    fn builds_distinct_dummy_friend_codes_for_synthetic_players() {
+        assert_eq!(dummy_friend_code("housekeeper-test-1"), "00000001");
+        assert_eq!(dummy_friend_code("housekeeper-test-10"), "00000010");
+        assert_eq!(dummy_friend_code("discord-user"), "00000000");
     }
 
     #[test]

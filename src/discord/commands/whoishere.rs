@@ -1,12 +1,13 @@
 use crate::{
     database::UserRepository,
     discord::bot::DiscordBot,
-    services::{balance_service, dota_profile_links, role_resolver, whoishere_service},
+    services::{balance_service, dota_profile_links, lobby_seed_service, whoishere_service},
     utils::error::{AppError, AppResult},
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
     CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+    InteractionResponseFlags,
 };
 pub fn register() -> CreateCommand {
     CreateCommand::new("whoishere")
@@ -64,34 +65,30 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
     for (discord_id, name) in members {
         let user = repo.find_or_create(&discord_id, &name).await?;
         if !user.inhouse_banned {
-            let role =
-                role_resolver::resolve(&bot.pool, guild.get() as i64, &user.discord_id).await?;
-            players.push(whoishere_service::view(user, role));
+            players.push(whoishere_service::view(user));
         }
     }
     whoishere_service::sort_players(&mut players);
     let mut text = format!("**Who is here?** ({} players)\n", players.len());
     for p in &players {
-        let role = p
-            .role
-            .as_ref()
-            .map(|role| role.name.as_str())
-            .unwrap_or("Member");
         text.push_str(&format!(
-            "• <@{}> — {} | {} | {}-{} ({} games)\n",
+            "• <@{}> — {} | {}-{} ({} games)\n",
             p.discord_id,
             bot.rank_emojis.label(p.rank),
-            role,
             p.wins,
             p.losses,
             p.games
         ));
-        if let Some(account_id) = p.account_id {
-            text.push_str(&format!(
-                "  {}\n",
-                dota_profile_links::markdown_line(account_id)
-            ));
-        }
+        let links = if let Some(account_id) = p.account_id {
+            dota_profile_links::markdown_line(account_id)
+        } else {
+            let dummy_code = lobby_seed_service::dummy_friend_code(&p.discord_id);
+            format!(
+                "{} · `{dummy_code}`",
+                dota_profile_links::markdown_home_line()
+            )
+        };
+        text.push_str(&format!("  {links}\n"));
     }
     if balance {
         let teams = balance_service::split(&players);
@@ -106,7 +103,11 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
     }
     c.create_response(
         ctx,
-        CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().content(text)),
+        CreateInteractionResponse::Message(
+            CreateInteractionResponseMessage::new()
+                .content(text)
+                .flags(InteractionResponseFlags::SUPPRESS_EMBEDS),
+        ),
     )
     .await
     .map_err(|e| AppError::Discord(e.to_string()))?;

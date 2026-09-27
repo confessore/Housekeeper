@@ -1,4 +1,4 @@
-use crate::models::{Rank, RoleTier, User};
+use crate::models::{Rank, User};
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +30,6 @@ pub struct PlayerView {
     pub display_name: String,
     pub account_id: Option<i64>,
     pub rank: Rank,
-    pub role: Option<RoleTier>,
     pub games: i32,
     pub wins: i32,
     pub losses: i32,
@@ -47,13 +46,12 @@ pub fn sort_players(players: &mut [PlayerView]) {
         }
     })
 }
-pub fn view(user: User, role: Option<RoleTier>) -> PlayerView {
-    view_with_stats(user, role, None, None, None)
+pub fn view(user: User) -> PlayerView {
+    view_with_stats(user, None, None, None)
 }
 
 pub fn view_with_stats(
     user: User,
-    role: Option<RoleTier>,
     rank_tier: Option<i32>,
     wins: Option<i32>,
     losses: Option<i32>,
@@ -75,7 +73,6 @@ pub fn view_with_stats(
         display_name: username,
         account_id: friend_code.and_then(|code| code.parse().ok()),
         rank: Rank::from_tier(rank_tier),
-        role,
         games: wins + losses,
         wins,
         losses,
