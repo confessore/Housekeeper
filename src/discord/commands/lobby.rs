@@ -1,6 +1,6 @@
 use crate::{
     discord::bot::DiscordBot,
-    services::{balance_service, lobby_service},
+    services::{balance_service, dota_profile_links, lobby_service},
     utils::error::{AppError, AppResult},
 };
 use serenity::all::{
@@ -71,8 +71,17 @@ async fn run_with_balance(
         let label = player_label(player);
         text.push_str(&format!(
             "• {label} — {} | {}-{} ({} games)\n",
-            player.rank, player.wins, player.losses, player.games
+            bot.rank_emojis.label(player.rank),
+            player.wins,
+            player.losses,
+            player.games
         ));
+        if let Some(account_id) = player.account_id {
+            text.push_str(&format!(
+                "  {}\n",
+                dota_profile_links::markdown_line(account_id)
+            ));
+        }
     }
     if balance {
         let teams = balance_service::split(&players);

@@ -46,6 +46,7 @@ mod tests {
             .map(|i| PlayerView {
                 discord_id: i.to_string(),
                 display_name: i.to_string(),
+                account_id: None,
                 rank: Rank::Immortal,
                 role: None,
                 games: 1,
@@ -63,6 +64,7 @@ mod tests {
         let low_sample = PlayerView {
             discord_id: "low".into(),
             display_name: "low".into(),
+            account_id: None,
             rank: Rank::Unranked,
             role: None,
             games: 10,
@@ -72,6 +74,7 @@ mod tests {
         let experienced = PlayerView {
             discord_id: "experienced".into(),
             display_name: "experienced".into(),
+            account_id: None,
             rank: Rank::Unranked,
             role: None,
             games: 2_600,
@@ -81,6 +84,7 @@ mod tests {
         let ranked_herald = PlayerView {
             discord_id: "herald".into(),
             display_name: "herald".into(),
+            account_id: None,
             rank: Rank::Herald,
             role: None,
             games: 100,

@@ -10,7 +10,7 @@ use anyhow::Result;
 use config::Settings;
 use database::connect;
 use discord::bot::DiscordBot;
-use services::rank_lookup_service::RankLookupService;
+use services::{rank_emoji_service, rank_lookup_service::RankLookupService};
 use tracing::info;
 
 #[tokio::main]
@@ -27,7 +27,13 @@ async fn main() -> Result<()> {
         settings.opendota_api_key.clone(),
         settings.opendota_requests_per_minute,
     );
-    let bot = DiscordBot::new(settings, pool, rank_service);
+    let rank_emojis = rank_emoji_service::ensure(&settings.discord_token).await;
+    let bot = DiscordBot::new(
+        settings,
+        pool,
+        rank_service,
+        std::sync::Arc::new(rank_emojis),
+    );
     info!("Starting Housekeeper");
     bot.start().await?;
     Ok(())

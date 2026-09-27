@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Rank {
     Herald,
     Guardian,
@@ -27,6 +27,40 @@ impl Rank {
             _ => Self::Unranked,
         }
     }
+    pub fn all() -> [Self; 9] {
+        [
+            Self::Unranked,
+            Self::Herald,
+            Self::Guardian,
+            Self::Crusader,
+            Self::Archon,
+            Self::Legend,
+            Self::Ancient,
+            Self::Divine,
+            Self::Immortal,
+        ]
+    }
+
+    pub fn emoji_tier_name(self) -> &'static str {
+        match self {
+            Self::Herald => "herald",
+            Self::Guardian => "guardian",
+            Self::Crusader => "crusader",
+            Self::Archon => "archon",
+            Self::Legend => "legend",
+            Self::Ancient => "ancient",
+            Self::Divine => "divine",
+            Self::Immortal => "immortal",
+            Self::Unranked => "unranked",
+        }
+    }
+
+    pub fn from_emoji_tier_name(name: &str) -> Option<Self> {
+        Self::all()
+            .into_iter()
+            .find(|rank| rank.emoji_tier_name() == name)
+    }
+
     pub fn order(self) -> i32 {
         match self {
             Self::Herald => 0,

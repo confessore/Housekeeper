@@ -1,8 +1,10 @@
 pub mod balance_service;
+pub mod dota_profile_links;
 pub mod guild_role_sync;
 pub mod lobby_seed_service;
 pub mod lobby_service;
 pub mod moderation;
+pub mod rank_emoji_service;
 pub mod rank_lookup_service;
 pub mod role_resolver;
 pub mod whoishere_service;

@@ -1,7 +1,7 @@
 use crate::{
     database::UserRepository,
     discord::bot::DiscordBot,
-    services::{balance_service, role_resolver, whoishere_service},
+    services::{balance_service, dota_profile_links, role_resolver, whoishere_service},
     utils::error::{AppError, AppResult},
 };
 use serenity::all::{
@@ -79,8 +79,19 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
             .unwrap_or("Member");
         text.push_str(&format!(
             "• <@{}> — {} | {} | {}-{} ({} games)\n",
-            p.discord_id, p.rank, role, p.wins, p.losses, p.games
+            p.discord_id,
+            bot.rank_emojis.label(p.rank),
+            role,
+            p.wins,
+            p.losses,
+            p.games
         ));
+        if let Some(account_id) = p.account_id {
+            text.push_str(&format!(
+                "  {}\n",
+                dota_profile_links::markdown_line(account_id)
+            ));
+        }
     }
     if balance {
         let teams = balance_service::split(&players);

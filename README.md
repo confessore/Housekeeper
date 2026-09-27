@@ -5,12 +5,12 @@ Housekeeper is a modular Rust Discord bot for inhouse communities. One bot insta
 ## Current commands
 
 - `/help` — explain how to use every Housekeeper command, including required permissions and guild scope.
-- `/whoishere [balance]` — list non-bot players in your current voice channel, ordered by rank. This is an ad-hoc voice scan, not the official lobby.
+- `/whoishere [balance]` — list non-bot players in your current voice channel, ordered by rank. Each linked player includes OpenDota, Dotabuff, and Stratz profile links. This is an ad-hoc voice scan, not the official lobby.
 - `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — create, inspect, or close numbered 10-player lobbies. Numbers are assigned automatically, reuse the smallest available number, and lobbies expire within 24 hours.
 - `/lobby-join <number>`, `/lobby-leave` — join or leave a numbered lobby. A player can be in only one lobby per server, and a linked Steam account is required. Rank and win/loss data are refreshed when joining, with cached data used if OpenDota is unavailable.
 - `/lobby-add <number> <user>`, `/lobby-remove <number> <user>` — moderator-only lobby membership management; adding a player also refreshes their OpenDota rank and win/loss data.
 - `/lobby-seed <number> [count]` — developer-only test helper that adds up to 10 synthetic players with varied ranks for balance testing; requires `DEVELOPER_DISCORD_IDS`.
-- `/lobby [number]` — list a numbered lobby (or your current lobby).
+- `/lobby [number]` — list a numbered lobby (or your current lobby), including rank badges and Dota profile links for linked players.
 - `/lobby-balance <number>` — list a numbered lobby split into balanced Radiant and Dire teams.
 - `/register <friend_code>` — link an 8-digit Steam friend code and cache OpenDota rank and win/loss data.
 - `/admin-role-tier create <name> <moderator>` — define a named tier for the current guild and choose whether it can manage the bot.
@@ -37,7 +37,7 @@ See [`docs/workflows.md`](docs/workflows.md) for Mermaid diagrams covering start
 1. Create a PostgreSQL database and copy `.env.example` to `.env`.
 2. Set `DISCORD_TOKEN`, `DATABASE_URL`, and optionally `DEVELOPER_DISCORD_IDS` or `DISCORD_COMMAND_GUILD_ID` for immediate development-guild command updates. `OPENDOTA_REQUESTS_PER_MINUTE` defaults to `60` to stay within the unauthenticated OpenDota limit; set it to the limit appropriate for your API key if applicable.
 3. Invite the bot to each guild with the required slash-command, member, role, and voice-state permissions/intents.
-4. Run `cargo run` (embedded SQLx migrations run at startup).
+4. Run `cargo run` (embedded SQLx migrations run at startup). On startup, the bot automatically provisions any missing Dota rank application emojis and discovers them; no emoji configuration or manual setup is required.
 5. In each guild, an Administrator runs `/admin-role-tier create`, then `/admin-role-map` to connect Discord roles to the configured tiers.
 
 ## Development

@@ -28,6 +28,7 @@ pub fn members_in_channel(caller_id: &str, members: &[VoiceMember]) -> Vec<(Stri
 pub struct PlayerView {
     pub discord_id: String,
     pub display_name: String,
+    pub account_id: Option<i64>,
     pub rank: Rank,
     pub role: Option<RoleTier>,
     pub games: i32,
@@ -60,6 +61,7 @@ pub fn view_with_stats(
     let User {
         discord_id,
         username,
+        friend_code,
         rank_tier: current_rank_tier,
         wins: current_wins,
         losses: current_losses,
@@ -71,6 +73,7 @@ pub fn view_with_stats(
     PlayerView {
         discord_id,
         display_name: username,
+        account_id: friend_code.and_then(|code| code.parse().ok()),
         rank: Rank::from_tier(rank_tier),
         role,
         games: wins + losses,

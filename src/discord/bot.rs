@@ -1,5 +1,8 @@
 use super::handler::Handler;
-use crate::{config::Settings, services::rank_lookup_service::RankLookupService};
+use crate::{
+    config::Settings,
+    services::{rank_emoji_service::RankEmojiMap, rank_lookup_service::RankLookupService},
+};
 use serenity::all::{Client, Context, GatewayIntents, GuildId, Ready};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -8,13 +11,20 @@ pub struct DiscordBot {
     pub settings: Arc<Settings>,
     pub pool: PgPool,
     pub rank_service: Arc<RankLookupService>,
+    pub rank_emojis: Arc<RankEmojiMap>,
 }
 impl DiscordBot {
-    pub fn new(settings: Settings, pool: PgPool, rank_service: Arc<RankLookupService>) -> Self {
+    pub fn new(
+        settings: Settings,
+        pool: PgPool,
+        rank_service: Arc<RankLookupService>,
+        rank_emojis: Arc<RankEmojiMap>,
+    ) -> Self {
         Self {
             settings: Arc::new(settings),
             pool,
             rank_service,
+            rank_emojis,
         }
     }
     pub async fn start(&self) -> anyhow::Result<()> {
