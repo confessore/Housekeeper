@@ -144,11 +144,11 @@ sequenceDiagram
 
 ## Steam and rank refresh
 
-`/register` accepts the caller's 8-digit Steam friend code, with or without a dash. The bot uses that numeric friend code as the OpenDota account identifier, refreshes cached Dota data, and stores the friend code. The API key is read from environment configuration and is never included in Discord responses.
+`/register` accepts the caller's numeric Steam friend code, with or without dashes. The bot uses that numeric friend code as the OpenDota account identifier, refreshes cached Dota data, and stores the friend code. The API key is read from environment configuration and is never included in Discord responses.
 
 ```mermaid
 flowchart LR
-    A["/register <friend_code>"] --> B["Parse 8-digit friend code"]
+    A["/register <friend_code>"] --> B["Parse numeric friend code"]
     B -->|Invalid| C["Return validation error"]
     B -->|Valid| D["Find or create caller"]
     D --> E["Fetch and cache OpenDota data"]

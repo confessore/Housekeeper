@@ -13,7 +13,7 @@ pub fn register() -> CreateCommand {
             CreateCommandOption::new(
                 CommandOptionType::String,
                 "friend_code",
-                "8-digit Steam friend code",
+                "Steam friend code",
             )
             .required(true),
         )

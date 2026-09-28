@@ -13,7 +13,7 @@ Housekeeper is a modular Rust Discord bot for DotA2 inhouse communities. One bot
 - `/lobby-seed <number> [count]` — developer-only test helper that adds up to 10 synthetic players with varied ranks for balance testing; requires `DEVELOPER_DISCORD_IDS`.
 - `/lobby [number]` — list a numbered lobby (or your current lobby), including rank badges and Dota profile links for linked players.
 - `/lobby-balance <number>` — list a numbered lobby split into balanced Radiant and Dire teams.
-- `/register <friend_code>` — link an 8-digit Steam friend code and cache OpenDota rank and win/loss data.
+- `/register <friend_code>` — link a Steam friend code and cache OpenDota rank and win/loss data.
 - `/admin-role-tier create <name> <moderator>` — define a named tier for the current guild and choose whether it can manage the bot.
 - `/admin-role-tier list` — list the current guild's configured tiers.
 - `/admin-role-map <discord_role> <tier>` — map a Discord role to a configured tier in the current guild.

@@ -13,7 +13,7 @@ Use `/housekeeper` for a private navigation hub, or `/help command:<command>` fo
 
 `/housekeeper` — Open private navigation for voice lookup, lobby list/current/create, Steam linking, and help. Shared lobby and voice panels are reused in the channel when possible.
 `/whoishere [balance]` — List non-bot players in your current voice channel with rank, guild tier, and record. The response includes Balance teams and Refresh buttons.
-`/register <friend_code>` — Link your 8-digit Steam friend code and refresh Dota data.
+`/register <friend_code>` — Link your Steam friend code and refresh Dota data.
 `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — Manage numbered lobbies. Numbers are assigned automatically and reused when available; lobbies expire within 24 hours.
 `/lobby-join <number>`, `/lobby-leave` — Join or leave a numbered lobby. Each player can be in one lobby per server.
 `/lobby-add <number> <user>`, `/lobby-remove <user>` — Moderator-only lobby membership management. A player can only be in one active lobby per server, so removal resolves the target's current lobby automatically.
@@ -36,7 +36,7 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "register",
-        "**/register <friend_code>**\nLink your 8-digit Steam friend code and refresh your cached rank and win/loss data. The code may be entered as `12345678` or `1234-5678`.",
+        "**/register <friend_code>**\nLink your Steam friend code and refresh your cached rank and win/loss data. The code may be entered as digits, with an optional dash.",
     ),
     (
         "lobby-create",

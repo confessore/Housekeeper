@@ -748,7 +748,7 @@ async fn show_steam_modal(c: &ComponentInteraction, ctx: &Context) -> AppResult<
             CreateModal::new("hk:steam_modal", "Link Steam account").components(vec![
                 CreateActionRow::InputText(
                     CreateInputText::new(InputTextStyle::Short, "Steam friend code", "friend_code")
-                        .placeholder("12345678 or 1234-5678"),
+                        .placeholder("digits, optionally with dashes"),
                 ),
             ]),
         ),
