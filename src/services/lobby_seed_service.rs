@@ -95,19 +95,10 @@ pub async fn seed(
             };
         let username = persona_name.as_deref().unwrap_or(friend_code);
         let user = users.find_or_create(&discord_id, username).await?;
-        match lobby_service::add(
-            pool,
-            discord_guild_id,
-            lobby_number,
-            &user,
-            actor,
-            rank_service,
-        )
-        .await
+        match lobby_service::add_with_snapshot(pool, discord_guild_id, lobby_number, &user, actor)
+            .await
         {
-            Ok(()) => result
-                .added
-                .push(users.find_by_discord(&discord_id).await?.unwrap_or(user)),
+            Ok(()) => result.added.push(user),
             Err(AppError::InvalidInput(message)) => {
                 result.skipped.push(format!("{friend_code} ({message})"));
                 if message.contains("full")

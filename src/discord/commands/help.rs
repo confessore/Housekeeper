@@ -52,7 +52,7 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "lobby-join",
-        "**/lobby-join <number>**\nJoin an active numbered lobby. The response opens the same shared lobby panel as the `Join` button.\n\n**Requirements**\n• Steam must be linked.\n• You must not be inhouse-banned.\n• You may only belong to one active lobby in this server.\n• The lobby must have fewer than 10 players.",
+        "**/lobby-join <number>**\nJoin an active numbered lobby. If Steam is not linked, submit your friend code and Housekeeper will attempt to join this lobby automatically. The response opens the same shared lobby panel as the `Join` button.\n\n**Requirements**\n• You must not be inhouse-banned.\n• You may only belong to one active lobby in this server.\n• The lobby must have fewer than 10 players.",
     ),
     (
         "lobby-leave",

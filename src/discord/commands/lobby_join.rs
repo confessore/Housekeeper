@@ -6,7 +6,7 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption,
+    CreateCommandOption, CreateInteractionResponse,
 };
 
 pub fn register() -> CreateCommand {
@@ -36,6 +36,19 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
     let user = UserRepository::new(bot.pool.clone())
         .find_or_create(&c.user.id.to_string(), &display_name)
         .await?;
+    let lobby = lobby_service::resolve_for_guild(&bot.pool, guild.get() as i64, number).await?;
+    if user.friend_code.is_none() {
+        c.create_response(
+            ctx,
+            CreateInteractionResponse::Modal(crate::discord::components::lobby_steam_modal(
+                lobby.number,
+                lobby.id,
+            )),
+        )
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
+        return Ok(());
+    }
     lobby_service::join(
         &bot.pool,
         guild.get() as i64,
@@ -44,6 +57,5 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         &bot.rank_service,
     )
     .await?;
-    let lobby = lobby_service::resolve_for_guild(&bot.pool, guild.get() as i64, number).await?;
     crate::discord::components::send_lobby_panel(ctx, c, bot, lobby.number, lobby.id, false).await
 }

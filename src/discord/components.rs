@@ -8,8 +8,8 @@ use serenity::all::{
     ActionRowComponent, ButtonStyle, CommandInteraction, ComponentInteraction,
     ComponentInteractionDataKind, Context, CreateActionRow, CreateButton, CreateEmbed,
     CreateInputText, CreateInteractionResponse, CreateInteractionResponseMessage, CreateModal,
-    CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputTextStyle,
-    ModalInteraction,
+    CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, EditInteractionResponse,
+    InputTextStyle, ModalInteraction,
 };
 
 const PREFIX: &str = "hk";
@@ -29,6 +29,27 @@ fn parse_panel_id(value: &str) -> Option<(i32, i64, &str)> {
             ))
         })
         .flatten()
+}
+
+fn parse_lobby_steam_modal_id(value: &str) -> Option<(i32, i64)> {
+    let mut parts = value.split(':');
+    if parts.next() != Some(PREFIX) || parts.next() != Some("steam_lobby") {
+        return None;
+    }
+    let number = parts.next()?.parse().ok()?;
+    let id = parts.next()?.parse().ok()?;
+    (number > 0 && id > 0 && parts.next().is_none()).then_some((number, id))
+}
+
+pub(crate) fn lobby_steam_modal(number: i32, id: i64) -> CreateModal {
+    CreateModal::new(
+        format!("{PREFIX}:steam_lobby:{number}:{id}"),
+        "Link Steam account",
+    )
+    .components(vec![CreateActionRow::InputText(
+        CreateInputText::new(InputTextStyle::Short, "Steam friend code", "friend_code")
+            .placeholder("digits, optionally with dashes"),
+    )])
 }
 
 fn parse_whoishere_id(value: &str) -> Option<(&str, &str)> {
@@ -553,16 +574,7 @@ pub async fn handle_component(
             if user.friend_code.is_none() {
                 c.create_response(
                     ctx,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content("Link Steam before joining this lobby.")
-                            .ephemeral(true)
-                            .components(vec![CreateActionRow::Buttons(vec![CreateButton::new(
-                                "hk:steam",
-                            )
-                            .label("Link Steam")
-                            .style(ButtonStyle::Primary)])]),
-                    ),
+                    CreateInteractionResponse::Modal(lobby_steam_modal(number, id)),
                 )
                 .await
                 .map_err(|e| AppError::Discord(e.to_string()))?;
@@ -759,48 +771,108 @@ async fn show_steam_modal(c: &ComponentInteraction, ctx: &Context) -> AppResult<
 }
 
 pub async fn handle_modal(ctx: &Context, c: &ModalInteraction, bot: &DiscordBot) -> AppResult<()> {
-    if c.data.custom_id != "hk:steam_modal" {
+    let lobby_context = parse_lobby_steam_modal_id(&c.data.custom_id);
+    if c.data.custom_id != "hk:steam_modal" && lobby_context.is_none() {
         return Err(AppError::InvalidInput(
             "This form is no longer available.".into(),
         ));
     }
-    let value = c
-        .data
-        .components
-        .iter()
-        .flat_map(|row| row.components.iter())
-        .find_map(|component| match component {
-            ActionRowComponent::InputText(input) if input.custom_id == "friend_code" => {
-                input.value.clone()
+    c.defer_ephemeral(ctx)
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
+    let result = async {
+        if let Some((number, id)) = lobby_context {
+            let guild = c
+                .guild_id
+                .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+            if lobby_service::resolve_panel(&bot.pool, guild.get() as i64, number, id)
+                .await?
+                .is_none()
+            {
+                return Err(AppError::InvalidInput("the lobby has ended".into()));
             }
-            _ => None,
-        })
-        .ok_or_else(|| AppError::InvalidInput("friend code is required".into()))?;
-    let display_name = member_name::interaction_name(&c.user, c.member.as_ref());
-    register_service::link(
-        &bot.pool,
-        &bot.rank_service,
-        &c.user.id.to_string(),
-        &display_name,
-        &value,
-    )
-    .await?;
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .content("Steam account linked and Dota data refreshed.")
-                .ephemeral(true),
-        ),
-    )
-    .await
-    .map_err(|e| AppError::Discord(e.to_string()))?;
+        }
+        let value = c
+            .data
+            .components
+            .iter()
+            .flat_map(|row| row.components.iter())
+            .find_map(|component| match component {
+                ActionRowComponent::InputText(input) if input.custom_id == "friend_code" => {
+                    input.value.clone()
+                }
+                _ => None,
+            })
+            .ok_or_else(|| AppError::InvalidInput("friend code is required".into()))?;
+        let display_name = member_name::interaction_name(&c.user, c.member.as_ref());
+        register_service::link(
+            &bot.pool,
+            &bot.rank_service,
+            &c.user.id.to_string(),
+            &display_name,
+            &value,
+        )
+        .await?;
+
+        if let Some((number, id)) = lobby_context {
+            let guild = c
+                .guild_id
+                .ok_or_else(|| AppError::InvalidInput("server only".into()))?;
+            let guild_id = guild.get() as i64;
+            let lobby = lobby_service::resolve_panel(&bot.pool, guild_id, number, id)
+                .await?
+                .ok_or_else(|| AppError::InvalidInput("the lobby has ended".into()))?;
+            let user = UserRepository::new(bot.pool.clone())
+                .find_by_discord(&c.user.id.to_string())
+                .await?
+                .ok_or_else(|| {
+                    AppError::InvalidInput("Steam account could not be loaded".into())
+                })?;
+            lobby_service::join_with_snapshot(&bot.pool, guild_id, &lobby, &user).await?;
+            bot.panel_registry
+                .bump(&ctx.http, PanelKey::lobby(number, c.channel_id), || {
+                    panel(ctx, bot, guild.get(), number, id, false)
+                })
+                .await?;
+            Ok(format!("Steam linked and you joined lobby #{number}."))
+        } else {
+            Ok("Steam account linked and Dota data refreshed.".into())
+        }
+    }
+    .await;
+    let content = match result {
+        Ok(content) => content,
+        Err(AppError::InvalidInput(message)) => message,
+        Err(AppError::Forbidden) => "You are not allowed to perform that action.".into(),
+        Err(error) => {
+            tracing::error!(?error, "Steam-link modal failed");
+            "Something went wrong. Please try again.".into()
+        }
+    };
+    c.edit_response(ctx, EditInteractionResponse::new().content(content))
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_whoishere_id;
+    use super::{parse_lobby_steam_modal_id, parse_whoishere_id};
+
+    #[test]
+    fn parses_lobby_steam_modal_context() {
+        assert_eq!(
+            parse_lobby_steam_modal_id("hk:steam_lobby:7:42"),
+            Some((7, 42))
+        );
+        assert_eq!(parse_lobby_steam_modal_id("hk:steam_lobby:0:42"), None);
+        assert_eq!(parse_lobby_steam_modal_id("hk:steam_lobby:7:-1"), None);
+        assert_eq!(
+            parse_lobby_steam_modal_id("hk:steam_lobby:7:42:extra"),
+            None
+        );
+        assert_eq!(parse_lobby_steam_modal_id("hk:steam_modal"), None);
+    }
 
     #[test]
     fn parses_whoishere_controls_without_matching_lobby_controls() {

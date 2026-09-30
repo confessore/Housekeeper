@@ -107,6 +107,61 @@ pub(crate) async fn resolve_panel(
     Ok(lobby.filter(|lobby| panel_matches(Some(lobby), expected_id)))
 }
 
+async fn check_membership(
+    pool: &PgPool,
+    guild_id: i64,
+    lobby: &Lobby,
+    user: &User,
+    already_in_lobby: impl FnOnce(i32) -> String,
+) -> AppResult<()> {
+    let repo = LobbyRepository::new(pool);
+    if let Some(current) = repo
+        .find_current_for_member(guild_id, &user.discord_id)
+        .await?
+    {
+        return Err(AppError::InvalidInput(already_in_lobby(current.number)));
+    }
+    validate_join(
+        user.friend_code.is_some(),
+        user.inhouse_banned,
+        false,
+        repo.count(lobby.id).await?,
+    )
+}
+
+async fn insert_snapshot(
+    pool: &PgPool,
+    guild_id: i64,
+    lobby: &Lobby,
+    user: &User,
+    actor: &str,
+    expired_message: &str,
+    conflict_message: &str,
+) -> AppResult<()> {
+    if !LobbyRepository::new(pool)
+        .add(
+            lobby.id,
+            &user.discord_id,
+            actor,
+            user.rank_tier,
+            user.wins,
+            user.losses,
+        )
+        .await?
+    {
+        if !panel_matches(
+            resolve_panel(pool, guild_id, lobby.number, lobby.id)
+                .await?
+                .as_ref(),
+            lobby.id,
+        ) {
+            return Err(AppError::InvalidInput(expired_message.into()));
+        }
+        return Err(AppError::InvalidInput(conflict_message.into()));
+    }
+    Ok(())
+}
+
 pub async fn join(
     pool: &PgPool,
     discord_guild_id: i64,
@@ -115,23 +170,11 @@ pub async fn join(
     rank_service: &RankLookupService,
 ) -> AppResult<()> {
     let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
-    let repo = LobbyRepository::new(pool);
     let lobby = resolve(pool, guild_id, number).await?;
-    if let Some(current) = repo
-        .find_current_for_member(guild_id, &user.discord_id)
-        .await?
-    {
-        return Err(AppError::InvalidInput(format!(
-            "you are already in lobby #{}",
-            current.number
-        )));
-    }
-    validate_join(
-        user.friend_code.is_some(),
-        user.inhouse_banned,
-        false,
-        repo.count(lobby.id).await?,
-    )?;
+    check_membership(pool, guild_id, &lobby, user, |number| {
+        format!("you are already in lobby #{number}")
+    })
+    .await?;
     let snapshot = match rank_service.refresh(user).await {
         Ok(user) => user,
         Err(error) => {
@@ -139,25 +182,39 @@ pub async fn join(
             user.clone()
         }
     };
-    if !repo
-        .add(
-            lobby.id,
-            &snapshot.discord_id,
-            &snapshot.discord_id,
-            snapshot.rank_tier,
-            snapshot.wins,
-            snapshot.losses,
-        )
-        .await?
-    {
-        if resolve(pool, guild_id, number).await.is_err() {
-            return Err(AppError::InvalidInput("the lobby has ended".into()));
-        }
-        return Err(AppError::InvalidInput(
-            "the lobby filled up or you are already in it".into(),
-        ));
-    }
-    Ok(())
+    insert_snapshot(
+        pool,
+        guild_id,
+        &lobby,
+        &snapshot,
+        &snapshot.discord_id,
+        "the lobby has ended",
+        "the lobby filled up or you are already in it",
+    )
+    .await
+}
+
+pub(crate) async fn join_with_snapshot(
+    pool: &PgPool,
+    discord_guild_id: i64,
+    lobby: &Lobby,
+    user: &User,
+) -> AppResult<()> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
+    check_membership(pool, guild_id, lobby, user, |number| {
+        format!("you are already in lobby #{number}")
+    })
+    .await?;
+    insert_snapshot(
+        pool,
+        guild_id,
+        lobby,
+        user,
+        &user.discord_id,
+        "the lobby has ended",
+        "the lobby filled up or you are already in it",
+    )
+    .await
 }
 
 pub async fn add(
@@ -169,23 +226,11 @@ pub async fn add(
     rank_service: &RankLookupService,
 ) -> AppResult<()> {
     let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
-    let repo = LobbyRepository::new(pool);
     let lobby = resolve(pool, guild_id, number).await?;
-    if let Some(current) = repo
-        .find_current_for_member(guild_id, &target.discord_id)
-        .await?
-    {
-        return Err(AppError::InvalidInput(format!(
-            "that player is already in lobby #{}",
-            current.number
-        )));
-    }
-    validate_join(
-        target.friend_code.is_some(),
-        target.inhouse_banned,
-        false,
-        repo.count(lobby.id).await?,
-    )?;
+    check_membership(pool, guild_id, &lobby, target, |number| {
+        format!("that player is already in lobby #{number}")
+    })
+    .await?;
     let snapshot = match rank_service.refresh(target).await {
         Ok(user) => user,
         Err(error) => {
@@ -193,25 +238,41 @@ pub async fn add(
             target.clone()
         }
     };
-    if !repo
-        .add(
-            lobby.id,
-            &snapshot.discord_id,
-            actor,
-            snapshot.rank_tier,
-            snapshot.wins,
-            snapshot.losses,
-        )
-        .await?
-    {
-        if resolve(pool, guild_id, number).await.is_err() {
-            return Err(AppError::InvalidInput("the lobby has ended".into()));
-        }
-        return Err(AppError::InvalidInput(
-            "the lobby filled up or that player is already in it".into(),
-        ));
-    }
-    Ok(())
+    insert_snapshot(
+        pool,
+        guild_id,
+        &lobby,
+        &snapshot,
+        actor,
+        "the lobby has ended",
+        "the lobby filled up or that player is already in it",
+    )
+    .await
+}
+
+pub(crate) async fn add_with_snapshot(
+    pool: &PgPool,
+    discord_guild_id: i64,
+    number: i32,
+    target: &User,
+    actor: &str,
+) -> AppResult<()> {
+    let guild_id = resolve_guild_id(pool, discord_guild_id).await?;
+    let lobby = resolve(pool, guild_id, number).await?;
+    check_membership(pool, guild_id, &lobby, target, |number| {
+        format!("that player is already in lobby #{number}")
+    })
+    .await?;
+    insert_snapshot(
+        pool,
+        guild_id,
+        &lobby,
+        target,
+        actor,
+        "the lobby has ended",
+        "the lobby filled up or that player is already in it",
+    )
+    .await
 }
 
 pub async fn leave(pool: &PgPool, discord_guild_id: i64, discord_id: &str) -> AppResult<()> {
