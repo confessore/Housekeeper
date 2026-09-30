@@ -23,54 +23,6 @@ impl UserRepository {
             inhouse_banned: row.7,
         })
     }
-    pub async fn upsert_synthetic(
-        &self,
-        discord_id: &str,
-        username: &str,
-        rank_tier: Option<i32>,
-        wins: i32,
-        losses: i32,
-    ) -> AppResult<User> {
-        let row = sqlx::query_as::<
-            _,
-            (
-                i64,
-                String,
-                String,
-                Option<String>,
-                Option<i32>,
-                i32,
-                i32,
-                bool,
-            ),
-        >(
-            "INSERT INTO users (discord_id,username,friend_code,rank_tier,wins,losses)
-             VALUES ($1,$2,$1,$3,$4,$5)
-             ON CONFLICT (discord_id) DO UPDATE SET
-                 username=EXCLUDED.username, friend_code=EXCLUDED.friend_code,
-                 rank_tier=EXCLUDED.rank_tier, wins=EXCLUDED.wins,
-                 losses=EXCLUDED.losses, inhouse_banned=false, updated_at=NOW()
-             RETURNING id,discord_id,username,friend_code,rank_tier,wins,losses,inhouse_banned",
-        )
-        .bind(discord_id)
-        .bind(username)
-        .bind(rank_tier)
-        .bind(wins)
-        .bind(losses)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(User {
-            id: row.0,
-            discord_id: row.1,
-            username: row.2,
-            friend_code: row.3,
-            rank_tier: row.4,
-            wins: row.5,
-            losses: row.6,
-            inhouse_banned: row.7,
-        })
-    }
-
     pub async fn find_by_discord(&self, discord_id: &str) -> AppResult<Option<User>> {
         let row = sqlx::query_as::<_, (i64, String, String, Option<String>, Option<i32>, i32, i32, bool)>(
             "SELECT id,discord_id,username,friend_code,rank_tier,wins,losses,inhouse_banned FROM users WHERE discord_id=$1",

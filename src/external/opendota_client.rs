@@ -17,6 +17,12 @@ pub struct OpenDotaClient {
 #[derive(Debug, Deserialize)]
 pub struct Player {
     pub rank_tier: Option<i32>,
+    pub profile: Option<PlayerProfile>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PlayerProfile {
+    pub personaname: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,6 +128,21 @@ impl OpenDotaClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deserializes_optional_steam_persona_name() {
+        let player: Player =
+            serde_json::from_str(r#"{"rank_tier":42,"profile":{"personaname":"Steam Player"}}"#)
+                .unwrap();
+        assert_eq!(player.rank_tier, Some(42));
+        assert_eq!(
+            player.profile.and_then(|profile| profile.personaname),
+            Some("Steam Player".into())
+        );
+
+        let player: Player = serde_json::from_str(r#"{"rank_tier":null}"#).unwrap();
+        assert!(player.profile.is_none());
+    }
 
     #[test]
     fn request_interval_respects_minimum_rate() {

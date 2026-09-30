@@ -18,7 +18,7 @@ pub async fn link(
     discord_id: &str,
     display_name: &str,
     input: &str,
-) -> AppResult<()> {
+) -> AppResult<Option<String>> {
     let friend_code = parse_friend_code(input)
         .ok_or_else(|| AppError::InvalidInput("provide your Steam friend code".into()))?;
     let account_id = friend_code

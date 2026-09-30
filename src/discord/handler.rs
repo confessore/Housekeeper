@@ -101,26 +101,27 @@ impl EventHandler for Handler {
                 _ => Ok(()),
             };
             if let Err(e) = result {
-                let response = if command.data.name == "lobby-create" {
-                    command
-                        .edit_response(
-                            &ctx.http,
-                            EditInteractionResponse::new().content(user_error(&e)),
-                        )
-                        .await
-                        .map(|_| ())
-                } else {
-                    command
-                        .create_response(
-                            &ctx.http,
-                            serenity::all::CreateInteractionResponse::Message(
-                                serenity::all::CreateInteractionResponseMessage::new()
-                                    .content(user_error(&e))
-                                    .ephemeral(true),
-                            ),
-                        )
-                        .await
-                };
+                let response =
+                    if matches!(command.data.name.as_str(), "lobby-create" | "lobby-seed") {
+                        command
+                            .edit_response(
+                                &ctx.http,
+                                EditInteractionResponse::new().content(user_error(&e)),
+                            )
+                            .await
+                            .map(|_| ())
+                    } else {
+                        command
+                            .create_response(
+                                &ctx.http,
+                                serenity::all::CreateInteractionResponse::Message(
+                                    serenity::all::CreateInteractionResponseMessage::new()
+                                        .content(user_error(&e))
+                                        .ephemeral(true),
+                                ),
+                            )
+                            .await
+                    };
                 if let Err(response_error) = response {
                     tracing::error!(?response_error, "failed to send interaction error response");
                 }

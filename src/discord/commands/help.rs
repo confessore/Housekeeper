@@ -17,7 +17,7 @@ Use `/housekeeper` for a private navigation hub, or `/help command:<command>` fo
 `/lobby-create [hours]`, `/lobby-list`, `/lobby-close <number>` — Manage numbered lobbies. Numbers are assigned automatically and reused when available; lobbies expire within 24 hours.
 `/lobby-join <number>`, `/lobby-leave` — Join or leave a numbered lobby. Each player can be in one lobby per server.
 `/lobby-add <number> <user>`, `/lobby-remove <user>` — Moderator-only lobby membership management. A player can only be in one active lobby per server, so removal resolves the target's current lobby automatically.
-`/lobby-seed <number> [count]` — Developer-only synthetic roster for balance testing.
+`/lobby-seed <number> [count]` — Developer-only Steam-backed test roster with live OpenDota data for balance testing.
 `/lobby [number]` — Show a numbered lobby, or your current lobby.
 `/lobby-balance <number>` — Show a numbered lobby split into balanced Radiant and Dire teams.
 `/admin-role-tier`, `/admin-role-map` — Create, list, map, and remove guild role tiers and role mappings.
@@ -76,7 +76,7 @@ const COMMAND_HELP: &[(&str, &str)] = &[
     ),
     (
         "lobby-seed",
-        "**/lobby-seed <number> [count]**\nAdd synthetic players with varied rank tiers to an existing lobby for balance testing.\n\n**Options**\n• `number` (required) — Existing lobby number to seed.\n• `count` (optional) — Number of synthetic players from 1 to 10; defaults to 10.\n\n**Permissions**\nDeveloper-only. The caller's Discord ID must be listed in `DEVELOPER_DISCORD_IDS`.",
+        "**/lobby-seed <number> [count]**\nAdd Steam-backed test identities to an existing lobby for balance testing. Names, ranks, and win/loss data are loaded through the normal Steam-link and lobby-add flow. These test identities do not correspond to Discord users. Existing seeded identities are skipped, and seeding stops at the requested count or lobby capacity. If OpenDota has no public Steam name, the friend code is shown instead.\n\n**Options**\n• `number` (required) — Existing lobby number to seed.\n• `count` (optional) — Number of new players from 1 to 10; defaults to 10.\n\n**Permissions**\nDeveloper-only. The caller's Discord ID must be listed in `DEVELOPER_DISCORD_IDS`.",
     ),
     (
         "admin-role-tier",

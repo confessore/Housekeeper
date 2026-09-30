@@ -19,7 +19,12 @@ impl RankLookupService {
         })
     }
 
-    pub async fn link(&self, user_id: i64, friend_code: &str, account_id: i64) -> AppResult<()> {
+    pub async fn link(
+        &self,
+        user_id: i64,
+        friend_code: &str,
+        account_id: i64,
+    ) -> AppResult<Option<String>> {
         self.sync(user_id, friend_code, account_id).await
     }
 
@@ -37,11 +42,21 @@ impl RankLookupService {
             .unwrap_or_else(|| user.clone()))
     }
 
-    async fn sync(&self, user_id: i64, friend_code: &str, account_id: i64) -> AppResult<()> {
+    async fn sync(
+        &self,
+        user_id: i64,
+        friend_code: &str,
+        account_id: i64,
+    ) -> AppResult<Option<String>> {
         let player = self.client.player(account_id).await?;
         let wl = self.client.win_loss(account_id).await?;
         UserRepository::new(self.pool.clone())
             .update_friend_code(user_id, friend_code, player.rank_tier, wl.win, wl.lose)
-            .await
+            .await?;
+        Ok(player
+            .profile
+            .and_then(|profile| profile.personaname)
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty()))
     }
 }

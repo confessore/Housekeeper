@@ -5,12 +5,12 @@ use crate::{
 };
 use serenity::all::{
     CommandDataOptionValue, CommandInteraction, CommandOptionType, Context, CreateCommand,
-    CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
+    CreateCommandOption, EditInteractionResponse,
 };
 
 pub fn register() -> CreateCommand {
     CreateCommand::new("lobby-seed")
-        .description("Add synthetic players for balance testing (developer only)")
+        .description("Add Steam-backed test players for balance testing (developer only)")
         .add_option(
             CreateCommandOption::new(CommandOptionType::Integer, "number", "Lobby number")
                 .required(true),
@@ -50,15 +50,20 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
             _ => None,
         })
         .unwrap_or(lobby_service::CAPACITY);
-    let users = lobby_seed_service::seed(
+    c.defer_ephemeral(ctx)
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
+    let result = lobby_seed_service::seed(
         &bot.pool,
         guild.get() as i64,
         number,
         count,
+        &c.user.id.to_string(),
         &bot.rank_service,
     )
     .await?;
-    let roster = users
+    let roster = result
+        .added
         .iter()
         .map(|user| {
             format!(
@@ -69,18 +74,16 @@ pub async fn run(ctx: &Context, c: &CommandInteraction, bot: &DiscordBot) -> App
         })
         .collect::<Vec<_>>()
         .join(", ");
-    c.create_response(
-        ctx,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .content(format!(
-                    "Added {} synthetic players to lobby #{number}: {roster}",
-                    users.len()
-                ))
-                .ephemeral(true),
-        ),
-    )
-    .await
-    .map_err(|error| AppError::Discord(error.to_string()))?;
+    let mut content = format!(
+        "Added {} Steam-backed test players to lobby #{number}: {}",
+        result.added.len(),
+        if roster.is_empty() { "none" } else { &roster }
+    );
+    if !result.skipped.is_empty() {
+        content.push_str(&format!("\nSkipped: {}", result.skipped.join(", ")));
+    }
+    c.edit_response(ctx, EditInteractionResponse::new().content(content))
+        .await
+        .map_err(|error| AppError::Discord(error.to_string()))?;
     Ok(())
 }
