@@ -48,8 +48,7 @@ impl RankLookupService {
         friend_code: &str,
         account_id: i64,
     ) -> AppResult<Option<String>> {
-        let player = self.client.player(account_id).await?;
-        let wl = self.client.win_loss(account_id).await?;
+        let (player, wl) = self.client.player_and_win_loss(account_id).await?;
         UserRepository::new(self.pool.clone())
             .update_friend_code(user_id, friend_code, player.rank_tier, wl.win, wl.lose)
             .await?;

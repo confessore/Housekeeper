@@ -1,31 +1,52 @@
 use crate::utils::error::{AppError, AppResult};
 use serde::Deserialize;
-use std::{sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Weak},
+    time::Duration,
+};
+use tokio::{sync::Mutex, time::Instant};
 
 const BASE: &str = "https://api.opendota.com/api";
 const MAX_RETRIES: u32 = 3;
+const LOOKUP_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const MAX_RETRY_AFTER_WAIT: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub struct OpenDotaClient {
     client: reqwest::Client,
     key: Option<String>,
-    next_request: Arc<Mutex<tokio::time::Instant>>,
+    next_request: Arc<Mutex<Instant>>,
     request_interval: Duration,
+    lookup_locks: Arc<Mutex<HashMap<i64, Weak<Mutex<()>>>>>,
+    lookup_cache: Arc<Mutex<HashMap<i64, CachedLookup>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone)]
+struct CachedLookup {
+    fetched_at: Instant,
+    player: Player,
+    win_loss: WinLoss,
+}
+
+impl CachedLookup {
+    fn is_fresh(&self, now: Instant) -> bool {
+        now.duration_since(self.fetched_at) < LOOKUP_CACHE_TTL
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Player {
     pub rank_tier: Option<i32>,
     pub profile: Option<PlayerProfile>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct PlayerProfile {
     pub personaname: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct WinLoss {
     pub win: i32,
     pub lose: i32,
@@ -40,8 +61,10 @@ impl OpenDotaClient {
                 .build()
                 .unwrap_or_default(),
             key,
-            next_request: Arc::new(Mutex::new(tokio::time::Instant::now())),
+            next_request: Arc::new(Mutex::new(Instant::now())),
             request_interval,
+            lookup_locks: Arc::new(Mutex::new(HashMap::new())),
+            lookup_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -78,6 +101,11 @@ impl OpenDotaClient {
                 if attempt < MAX_RETRIES {
                     let delay =
                         Self::retry_after(&response).unwrap_or_else(|| Self::retry_delay(attempt));
+                    if !Self::retry_after_allowed(delay) {
+                        return Err(AppError::External(
+                            "OpenDota rate limited; Retry-After exceeds the retry window".into(),
+                        ));
+                    }
                     tokio::time::sleep(delay).await;
                     continue;
                 }
@@ -112,16 +140,61 @@ impl OpenDotaClient {
             .headers()
             .get(reqwest::header::RETRY_AFTER)
             .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.parse::<u64>().ok())
-            .map(|seconds| Duration::from_secs(seconds.min(30)))
+            .and_then(Self::parse_retry_after)
     }
 
-    pub async fn player(&self, id: i64) -> AppResult<Player> {
-        self.get(&format!("/players/{id}")).await
+    fn parse_retry_after(value: &str) -> Option<Duration> {
+        if let Ok(seconds) = value.parse::<u64>() {
+            return Some(Duration::from_secs(seconds));
+        }
+        let retry_at = chrono::DateTime::parse_from_rfc2822(value)
+            .ok()?
+            .with_timezone(&chrono::Utc);
+        Some(
+            retry_at
+                .signed_duration_since(chrono::Utc::now())
+                .to_std()
+                .unwrap_or(Duration::ZERO),
+        )
     }
 
-    pub async fn win_loss(&self, id: i64) -> AppResult<WinLoss> {
-        self.get(&format!("/players/{id}/wl")).await
+    fn retry_after_allowed(delay: Duration) -> bool {
+        delay <= MAX_RETRY_AFTER_WAIT
+    }
+
+    async fn lookup_lock(&self, id: i64) -> Arc<Mutex<()>> {
+        let mut locks = self.lookup_locks.lock().await;
+        locks.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = locks.get(&id).and_then(Weak::upgrade) {
+            return lock;
+        }
+        let lock = Arc::new(Mutex::new(()));
+        locks.insert(id, Arc::downgrade(&lock));
+        lock
+    }
+
+    pub async fn player_and_win_loss(&self, id: i64) -> AppResult<(Player, WinLoss)> {
+        let account_lock = self.lookup_lock(id).await;
+        let _guard = account_lock.lock().await;
+        let now = Instant::now();
+        {
+            let mut cache = self.lookup_cache.lock().await;
+            cache.retain(|_, lookup| lookup.is_fresh(now));
+            if let Some(lookup) = cache.get(&id) {
+                return Ok((lookup.player.clone(), lookup.win_loss.clone()));
+            }
+        }
+        let player: Player = self.get(&format!("/players/{id}")).await?;
+        let win_loss: WinLoss = self.get(&format!("/players/{id}/wl")).await?;
+        self.lookup_cache.lock().await.insert(
+            id,
+            CachedLookup {
+                fetched_at: Instant::now(),
+                player: player.clone(),
+                win_loss: win_loss.clone(),
+            },
+        );
+        Ok((player, win_loss))
     }
 }
 
@@ -148,5 +221,42 @@ mod tests {
     fn request_interval_respects_minimum_rate() {
         assert_eq!(OpenDotaClient::request_interval(60), Duration::from_secs(1));
         assert_eq!(OpenDotaClient::request_interval(0), Duration::from_secs(60));
+    }
+
+    #[test]
+    fn cache_expires_after_five_minutes() {
+        let fetched_at = Instant::now();
+        let lookup = CachedLookup {
+            fetched_at,
+            player: Player {
+                rank_tier: None,
+                profile: None,
+            },
+            win_loss: WinLoss { win: 0, lose: 0 },
+        };
+        assert!(lookup.is_fresh(fetched_at + LOOKUP_CACHE_TTL - Duration::from_secs(1)));
+        assert!(!lookup.is_fresh(fetched_at + LOOKUP_CACHE_TTL));
+    }
+
+    #[test]
+    fn retry_after_is_not_shortened_or_retried_beyond_the_wait_limit() {
+        let delay = OpenDotaClient::parse_retry_after("60").unwrap();
+        assert_eq!(delay, Duration::from_secs(60));
+        assert!(!OpenDotaClient::retry_after_allowed(delay));
+        assert!(OpenDotaClient::retry_after_allowed(Duration::from_secs(30)));
+        assert_eq!(
+            OpenDotaClient::parse_retry_after("Tue, 15 Nov 1994 08:12:31 GMT"),
+            Some(Duration::ZERO)
+        );
+    }
+
+    #[tokio::test]
+    async fn account_locks_are_shared_only_for_the_same_account() {
+        let client = OpenDotaClient::new(None, 60);
+        let first = client.lookup_lock(42).await;
+        let same = client.lookup_lock(42).await;
+        let other = client.lookup_lock(43).await;
+        assert!(Arc::ptr_eq(&first, &same));
+        assert!(!Arc::ptr_eq(&first, &other));
     }
 }
